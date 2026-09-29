@@ -1,0 +1,189 @@
+{
+  "name": "Donald - TR",
+  "start": "2024-12-10",
+  "as_of": "2026-09-25",
+  "cash_weight": 0.0341,
+  "positions": [
+    {
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "weight": 0.3361,
+      "ref_price": 66.48
+    },
+    {
+      "ticker": "IQQF.DE",
+      "name": "iShares MSCI AC Far East ex-Japan",
+      "class": "Asie",
+      "weight": 0.2947,
+      "ref_price": 85.74
+    },
+    {
+      "ticker": "SGBS.MI",
+      "name": "WisdomTree Physical Swiss Gold",
+      "class": "Or",
+      "weight": 0.182,
+      "ref_price": 359.02
+    },
+    {
+      "ticker": "PPFB.DE",
+      "name": "iShares Physical Gold",
+      "class": "Or",
+      "weight": 0.1199,
+      "ref_price": 72.875
+    },
+    {
+      "ticker": "CBUK.DE",
+      "name": "iShares MSCI China Tech",
+      "class": "Asie",
+      "weight": 0.0331,
+      "ref_price": 4.1295
+    }
+  ],
+  "orders": [
+    {
+      "date": "2024-12-10",
+      "ticker": "PPFB.DE",
+      "name": "iShares Physical Gold",
+      "class": "Or",
+      "side": "buy",
+      "price": 48.671
+    },
+    {
+      "date": "2024-12-10",
+      "ticker": "IQQF.DE",
+      "name": "iShares MSCI AC Far East ex-Japan",
+      "class": "Asie",
+      "side": "buy",
+      "price": 48.56
+    },
+    {
+      "date": "2024-12-10",
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "side": "buy",
+      "price": 47.79
+    },
+    {
+      "date": "2025-01-22",
+      "ticker": "PPFB.DE",
+      "name": "iShares Physical Gold",
+      "class": "Or",
+      "side": "buy",
+      "price": 51.5195
+    },
+    {
+      "date": "2025-01-22",
+      "ticker": "IQQF.DE",
+      "name": "iShares MSCI AC Far East ex-Japan",
+      "class": "Asie",
+      "side": "buy",
+      "price": 49.0025
+    },
+    {
+      "date": "2025-01-22",
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "side": "buy",
+      "price": 49.9583
+    },
+    {
+      "date": "2025-01-31",
+      "ticker": "SGBS.MI",
+      "name": "WisdomTree Physical Swiss Gold",
+      "class": "Or",
+      "side": "buy",
+      "price": 259.42
+    },
+    {
+      "date": "2025-01-31",
+      "ticker": "IQQF.DE",
+      "name": "iShares MSCI AC Far East ex-Japan",
+      "class": "Asie",
+      "side": "buy",
+      "price": 49.7367
+    },
+    {
+      "date": "2025-01-31",
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "side": "buy",
+      "price": 49.1037
+    },
+    {
+      "date": "2025-01-31",
+      "ticker": "CBUK.DE",
+      "name": "iShares MSCI China Tech",
+      "class": "Asie",
+      "side": "buy",
+      "price": 4.1467
+    },
+    {
+      "date": "2025-04-30",
+      "ticker": "PPFB.DE",
+      "name": "iShares Physical Gold",
+      "class": "Or",
+      "side": "sell",
+      "price": 55.6232
+    },
+    {
+      "date": "2025-04-30",
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "side": "buy",
+      "price": 42.3412
+    },
+    {
+      "date": "2025-04-30",
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "side": "buy",
+      "price": 42.0552
+    },
+    {
+      "date": "2025-10-06",
+      "ticker": "CBUK.DE",
+      "name": "iShares MSCI China Tech",
+      "class": "Asie",
+      "side": "buy",
+      "price": 5.1918
+    },
+    {
+      "date": "2025-10-06",
+      "ticker": "H4ZX.DE",
+      "name": "HSBC Hang Seng TECH",
+      "class": "Asie",
+      "side": "buy",
+      "price": 7.9145
+    },
+    {
+      "date": "2025-10-06",
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "side": "buy",
+      "price": 46.3979
+    },
+    {
+      "date": "2025-10-06",
+      "ticker": "SGBS.MI",
+      "name": "WisdomTree Physical Swiss Gold",
+      "class": "Or",
+      "side": "buy",
+      "price": 324.1589
+    },
+    {
+      "date": "2026-01-12",
+      "ticker": "H4ZX.DE",
+      "name": "HSBC Hang Seng TECH",
+      "class": "Asie",
+      "side": "sell",
+      "price": 7.0764
+    }
+  ]
+}
