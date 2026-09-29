@@ -1,0 +1,48 @@
+{
+  "name": "Picsou ETH - TR",
+  "type": "trades",
+  "currency": "USD",
+  "start": "2026-03-31",
+  "asset": {
+    "ticker": "ETH-USD",
+    "name": "Ethereum",
+    "class": "Crypto"
+  },
+  "trades": [
+    {
+      "entry_date": "2026-03-31",
+      "entry_price": 2068.0,
+      "side": "long",
+      "exit_date": "2026-04-13",
+      "exit_price": 2234.19
+    },
+    {
+      "entry_date": "2026-05-12",
+      "entry_price": 2325.67,
+      "side": "short",
+      "exit_date": "2026-06-15",
+      "exit_price": 1727.0
+    },
+    {
+      "entry_date": "2026-06-15",
+      "entry_price": 1727.0,
+      "side": "long",
+      "exit_date": "2026-06-24",
+      "exit_price": 1663.09
+    },
+    {
+      "entry_date": "2026-06-24",
+      "entry_price": 1663.09,
+      "side": "short",
+      "exit_date": "2026-07-02",
+      "exit_price": 1625.25
+    },
+    {
+      "entry_date": "2026-07-02",
+      "entry_price": 1625.25,
+      "side": "long",
+      "exit_date": null,
+      "exit_price": null
+    }
+  ]
+}

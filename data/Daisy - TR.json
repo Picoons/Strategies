@@ -8,22 +8,22 @@
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.3784,
-      "ref_price": 13.795
+      "weight": 0.3789,
+      "ref_price": 13.785
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.3239,
-      "ref_price": 59.04
+      "weight": 0.3252,
+      "ref_price": 59.16
     },
     {
       "ticker": "DG.PA",
       "name": "Vinci",
       "class": "Industrie",
-      "weight": 0.2977,
-      "ref_price": 108.55
+      "weight": 0.2959,
+      "ref_price": 107.65
     }
   ],
   "orders": [
@@ -59,7 +59,7 @@
     ],
     "twr": [
       0.0,
-      -0.019999
+      -0.022042
     ]
   }
 }

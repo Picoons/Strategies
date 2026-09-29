@@ -1,36 +1,36 @@
 {
   "name": "Donald - TR",
   "start": "2024-12-10",
-  "as_of": "2026-09-25",
-  "cash_weight": 0.069,
+  "as_of": "2026-09-29",
+  "cash_weight": 0.0692,
   "positions": [
     {
       "ticker": "XDW0.DE",
       "name": "Xtrackers MSCI World Energy",
       "class": "Énergie",
-      "weight": 0.3355,
-      "ref_price": 66.48
+      "weight": 0.3373,
+      "ref_price": 66.56
     },
     {
       "ticker": "IQQF.DE",
       "name": "iShares MSCI AC Far East ex-Japan",
       "class": "Asie",
       "weight": 0.2942,
-      "ref_price": 85.74
+      "ref_price": 85.38
     },
     {
       "ticker": "SGBS.MI",
       "name": "WisdomTree Physical Swiss Gold",
       "class": "Or",
-      "weight": 0.1816,
+      "weight": 0.1824,
       "ref_price": 359.02
     },
     {
       "ticker": "PPFB.DE",
       "name": "iShares Physical Gold",
       "class": "Or",
-      "weight": 0.1197,
-      "ref_price": 72.875
+      "weight": 0.1169,
+      "ref_price": 70.845
     }
   ],
   "orders": [
@@ -657,7 +657,9 @@
       "2026-09-22",
       "2026-09-23",
       "2026-09-24",
-      "2026-09-25"
+      "2026-09-25",
+      "2026-09-28",
+      "2026-09-29"
     ],
     "twr": [
       0.0,
@@ -1128,7 +1130,9 @@
       0.49352,
       0.491649,
       0.491212,
-      0.488274
+      0.488274,
+      0.488274,
+      0.482072
     ]
   }
 }
