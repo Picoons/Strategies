@@ -11,6 +11,9 @@ les prix d'exécution des ordres, les niveaux des trades et la performance en %.
 from __future__ import annotations
 
 import json
+import re
+import subprocess
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +35,11 @@ pf = importlib.reload(pf)
 
 SITE_TITLE = "Mes stratégies d'investissement"
 DATA_DIR = Path(__file__).parent / "data"
+REFLEXIONS_DIR = Path(__file__).parent / "reflexions"
+
+# Dépôt GitHub du site : sert à lire les dates de publication / modification des réflexions.
+# Détecté automatiquement quand c'est possible ; sinon, mets ici "ton-compte/ton-depot".
+GITHUB_REPO = "Picoons/strategies"
 
 # Allocation cible par stratégie (clé = nom du fichier sans extension)
 TARGET_ALLOCATION = {
@@ -552,15 +560,164 @@ def render_overview(strategies: dict, prices_for):
 # APPLICATION
 # ---------------------------------------------------------------------------
 
-def main():
+# ---------------------------------------------------------------------------
+# PAGE : RÉFLEXIONS
+# ---------------------------------------------------------------------------
+# Chaque réflexion est un fichier Markdown (.md) dans le dossier reflexions/.
+# En-tête facultatif en début de fichier :
+#   ---
+#   titre: Pourquoi l'or dans un portefeuille permanent
+#   resume: Une phrase affichée dans la liste des réflexions.
+#   date: 2026-09-29          (date de publication, si tu veux la forcer)
+#   ---
+# Sans en-tête : titre = première ligne "# ...", sinon le nom du fichier.
+# Les dates de publication et de modification viennent de l'historique GitHub du fichier.
+
+def parse_markdown(text: str) -> tuple[dict, str]:
+    meta = {}
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n?", text, flags=re.S)
+    if m:
+        for line in m.group(1).splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                meta[pf.normalize(k)] = v.strip()
+        text = text[m.end():]
+    return meta, text.strip()
+
+
+def detect_repo() -> str:
+    try:
+        url = subprocess.run(["git", "config", "--get", "remote.origin.url"],
+                             cwd=Path(__file__).parent, capture_output=True, text=True,
+                             timeout=5).stdout.strip()
+        m = re.search(r"github\.com[:/]([^/]+/[^/.]+)", url)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return GITHUB_REPO
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def github_dates(repo: str, path: str, signature: tuple) -> tuple[str | None, str | None]:
+    """(première publication, dernière modification) d'un fichier, d'après ses commits GitHub."""
+    try:
+        url = f"https://api.github.com/repos/{repo}/commits?path={urllib.request.quote(path)}&per_page=100"
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                                   "User-Agent": "streamlit-reflexions"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            commits = json.loads(r.read().decode())
+        dates = [c["commit"]["committer"]["date"] for c in commits if "commit" in c]
+        if dates:
+            return min(dates), max(dates)
+    except Exception:
+        pass
+    return None, None
+
+
+def git_dates(path: Path) -> tuple[str | None, str | None]:
+    """Repli : historique git local (si disponible)."""
+    try:
+        out = subprocess.run(["git", "log", "--follow", "--format=%cI", "--", str(path)],
+                             cwd=Path(__file__).parent, capture_output=True, text=True,
+                             timeout=5).stdout.split()
+        if out:
+            return out[-1], out[0]
+    except Exception:
+        pass
+    return None, None
+
+
+def reflexions_signature() -> tuple:
+    if not REFLEXIONS_DIR.exists():
+        return ()
+    return tuple((f.name, f.stat().st_mtime, f.stat().st_size) for f in sorted(REFLEXIONS_DIR.glob("*.md")))
+
+
+def load_reflexions() -> list[dict]:
+    sig = reflexions_signature()
+    repo = detect_repo()
+    items = []
+    for f in sorted(REFLEXIONS_DIR.glob("*.md")) if REFLEXIONS_DIR.exists() else []:
+        meta, body = parse_markdown(f.read_text(encoding="utf-8"))
+        title = meta.get("titre") or meta.get("title")
+        if not title:
+            m = re.match(r"^#\s+(.+)$", body, flags=re.M)
+            if m and body.startswith("#"):
+                title = m.group(1).strip()
+                body = body[m.end():].strip()
+        title = title or f.stem.replace("-", " ").replace("_", " ").capitalize()
+
+        created, modified = github_dates(repo, f"reflexions/{f.name}", sig)
+        if not created:
+            created, modified = git_dates(f)
+        if not modified:
+            modified = pd.Timestamp(f.stat().st_mtime, unit="s").isoformat()
+            created = created or modified
+        if meta.get("date"):
+            created = meta["date"]
+
+        items.append({
+            "slug": slug(f.stem),
+            "title": title,
+            "summary": meta.get("resume") or meta.get("summary") or "",
+            "body": body,
+            "created": pd.Timestamp(created).tz_localize(None) if pd.Timestamp(created).tzinfo is None
+                       else pd.Timestamp(created).tz_convert("Europe/Paris").tz_localize(None),
+            "modified": pd.Timestamp(modified).tz_localize(None) if pd.Timestamp(modified).tzinfo is None
+                        else pd.Timestamp(modified).tz_convert("Europe/Paris").tz_localize(None),
+        })
+    return sorted(items, key=lambda x: x["modified"], reverse=True)
+
+
+def dates_line(item: dict) -> str:
+    line = f"Publié le {item['created']:%d/%m/%Y}"
+    if item["modified"].date() > item["created"].date():
+        line += f" · modifié le {item['modified']:%d/%m/%Y}"
+    return line
+
+
+def page_reflexions():
+    items = load_reflexions()
+    wanted = st.query_params.get("article", "")
+    current = next((it for it in items if it["slug"] == wanted), None)
+
+    if current:
+        if st.button("← Toutes les réflexions"):
+            del st.query_params["article"]
+            st.rerun()
+        st.title(current["title"])
+        st.caption(dates_line(current))
+        st.markdown(current["body"])
+        return
+
+    st.title("Réflexions")
+    if not items:
+        st.info("Aucune réflexion publiée pour l'instant.")
+        return
+    for it in items:
+        with st.container(border=True):
+            st.markdown(f"### {it['title']}")
+            st.caption(dates_line(it))
+            if it["summary"]:
+                st.markdown(it["summary"])
+            if st.button("Lire", key=f"read_{it['slug']}"):
+                st.query_params["article"] = it["slug"]
+                st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# PAGE : STRATÉGIES
+# ---------------------------------------------------------------------------
+
+def page_strategies():
     sig = data_signature()
     strategies, errors = load_strategies(sig)
     for e in errors:
         st.error(e)
     if not strategies:
-        st.title(f"📈 {SITE_TITLE}")
         st.info("Aucune stratégie publiée. Lance `python export_public.py` pour générer les fichiers de data/.")
-        st.stop()
+        return
 
     # Cours regroupés par devise (EUR pour Donald et Daisy, USD pour Picsou…)
     by_ccy: dict[str, set] = {}
@@ -576,7 +733,7 @@ def main():
             prices_by_ccy[ccy] = get_prices(tuple(sorted(tickers)), str(starts[ccy].date()), ccy, sig)
     except Exception as e:
         st.error(f"Impossible de récupérer les cours : {e}")
-        st.stop()
+        return
 
     def prices_for(key: str) -> pd.DataFrame:
         return prices_by_ccy[currency(strategies[key])]
@@ -608,7 +765,7 @@ def main():
         strat = strategies[choice]
         if prices.dropna(how="all").empty:
             st.error("Yahoo Finance n'a renvoyé aucun cours. Réessaie dans quelques minutes.")
-            st.stop()
+            return
         last = prices.dropna(how="all").index.max()
         st.title(names[choice])
         st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées) · "
@@ -622,6 +779,37 @@ def main():
     st.caption("Stratégies personnelles présentées à titre informatif, hors frais et fiscalité. "
                "Les indices de référence sont hors dividendes. "
                "Ceci ne constitue pas un conseil en investissement.")
+
+
+# ---------------------------------------------------------------------------
+# APPLICATION
+# ---------------------------------------------------------------------------
+
+SECTIONS = {"strategies": "📈 Stratégies", "reflexions": "✍️ Réflexions"}
+
+
+def main():
+    # Lien partageable : ?page=reflexions (ou ?page=strategies)
+    current = st.query_params.get("page", "strategies")
+    if current not in SECTIONS:
+        current = "strategies"
+    section = st.segmented_control("Section", list(SECTIONS.keys()), default=current,
+                                   format_func=SECTIONS.get, label_visibility="collapsed",
+                                   key="section")
+    section = section or current  # un second clic sur l'onglet actif ne le désélectionne pas
+
+    previous = st.query_params.get("page")
+    if previous is None:
+        st.query_params["page"] = section
+    elif section != previous:
+        # Changement de section : on repart d'une URL propre
+        st.query_params.clear()
+        st.query_params["page"] = section
+
+    if section == "reflexions":
+        page_reflexions()
+    else:
+        page_strategies()
 
 
 main()
