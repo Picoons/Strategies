@@ -8,22 +8,29 @@
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.3789,
-      "ref_price": 13.785
+      "weight": 0.2795,
+      "ref_price": 13.73
+    },
+    {
+      "ticker": "EN.PA",
+      "name": "Bouygues",
+      "class": "Industrie",
+      "weight": 0.2603,
+      "ref_price": 42.61
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.3252,
-      "ref_price": 59.16
+      "weight": 0.2393,
+      "ref_price": 58.76
     },
     {
       "ticker": "DG.PA",
       "name": "Vinci",
       "class": "Industrie",
-      "weight": 0.2959,
-      "ref_price": 107.65
+      "weight": 0.2209,
+      "ref_price": 108.5
     }
   ],
   "orders": [
@@ -50,6 +57,14 @@
       "class": "Télécoms & médias",
       "side": "buy",
       "price": 14.34
+    },
+    {
+      "date": "2026-09-29",
+      "ticker": "EN.PA",
+      "name": "Bouygues",
+      "class": "Industrie",
+      "side": "buy",
+      "price": 43.08
     }
   ],
   "perf": {
@@ -59,7 +74,7 @@
     ],
     "twr": [
       0.0,
-      -0.022042
+      -0.020674
     ]
   }
 }
