@@ -38,6 +38,14 @@ TARGET_ALLOCATION = {
     "Donald - TR": {"Or": 1 / 3, "Asie": 1 / 3, "Énergie": 1 / 3},
 }
 
+# Nom affiché sur le site (clé = nom du fichier sans extension).
+# Sans entrée ici, on affiche le début du nom de fichier ("Donald - TR" -> "Donald").
+STRATEGY_NAMES = {
+    "Donald - TR": "Permanent portfolio",
+    "Daisy - TR": "PEA strategy",
+    "Picsou ETH - TR": "Ethereum swing trading",
+}
+
 # Texte de présentation par stratégie (facultatif)
 DESCRIPTIONS = {
     "Donald - TR": "Portefeuille d'ETF équipondéré en trois blocs : "
@@ -101,6 +109,14 @@ def pct(x, sign: bool = True, decimals: int = 1) -> str:
 
 def class_color(label: str, i: int) -> str:
     return CLASS_COLORS.get(label, PALETTE[i % len(PALETTE)])
+
+
+def display_name(key: str) -> str:
+    return STRATEGY_NAMES.get(key, key.split(" - ")[0].strip())
+
+
+def slug(text: str) -> str:
+    return "-".join(pf.normalize(text).replace("&", " ").split())
 
 
 def currency(strat: dict) -> str:
@@ -346,7 +362,7 @@ def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | No
         options = ([STRATEGY_OPTION] if perf is not None else []) + list(assets.keys())
         choice = st.selectbox("Afficher", options, key=f"sel_{key}", label_visibility="collapsed")
         if choice == STRATEGY_OPTION:
-            st.plotly_chart(chart_strategy(perf, key.split(" - ")[0], benches),
+            st.plotly_chart(chart_strategy(perf, display_name(key), benches),
                             width="stretch", key=f"perf_{key}")
         elif assets.get(choice) in prices.columns:
             st.plotly_chart(chart_asset(assets[choice], choice, prices, pd.Timestamp(strat["start"])),
@@ -514,10 +530,10 @@ def render_overview(strategies: dict, prices_for):
         perf = strategy_perf(strat, prices)
         labels, values, colors = exposure(strat, prices)
         with col:
-            st.markdown(f"**{key.split(' - ')[0]}**")
+            st.markdown(f"**{display_name(key)}**")
             st.caption(f"Depuis le {pd.Timestamp(strat['start']):%d/%m/%Y} · devise {currency(strat)}")
             if perf is not None:
-                series[key.split(" - ")[0]] = perf
+                series[display_name(key)] = perf
                 st.metric("Rendement total", pct(perf_kpis(perf, periods_per_year(strat))["total"]))
             st.plotly_chart(chart_donut(labels, values, colors), width="stretch", key=f"ov_{key}")
 
@@ -565,20 +581,24 @@ def main():
     def prices_for(key: str) -> pd.DataFrame:
         return prices_by_ccy[currency(strategies[key])]
 
-    # --- Menu de sélection de la stratégie (lien partageable : ?strategie=Daisy)
+    # --- Menu de sélection de la stratégie
+    # Lien partageable : ?strategie=permanent-portfolio (ou l'ancien nom : ?strategie=donald)
     keys = list(strategies.keys())
     options = keys + ([COMPARE_OPTION] if len(keys) > 1 else [])
-    short = {k: k.split(" - ")[0].strip() for k in keys}
-    wanted = st.query_params.get("strategie", "")
-    w = wanted.strip().lower()
-    default = next((i for i, k in enumerate(keys)
-                    if w and (short[k].lower() == w or short[k].lower().split()[0] == w)), 0)
-    if wanted.lower() == "comparaison" and len(keys) > 1:
+    names = {k: display_name(k) for k in keys}
+    w = st.query_params.get("strategie", "").strip().lower()
+
+    def matches(k: str) -> bool:
+        return bool(w) and w in (slug(names[k]), slug(k.split(" - ")[0]),
+                                 pf.normalize(k.split(" - ")[0]).split()[0])
+
+    default = next((i for i, k in enumerate(keys) if matches(k)), 0)
+    if w == "comparaison" and len(keys) > 1:
         default = len(keys)
     col, _ = st.columns([1, 3])
     choice = col.selectbox("Stratégie", options, index=default,
-                           format_func=lambda k: short.get(k, k))
-    st.query_params["strategie"] = short.get(choice, "comparaison")
+                           format_func=lambda k: names.get(k, k))
+    st.query_params["strategie"] = slug(names[choice]) if choice in names else "comparaison"
 
     if choice == COMPARE_OPTION:
         st.title("Comparaison des stratégies")
@@ -586,8 +606,11 @@ def main():
     else:
         prices = prices_for(choice)
         strat = strategies[choice]
+        if prices.dropna(how="all").empty:
+            st.error("Yahoo Finance n'a renvoyé aucun cours. Réessaie dans quelques minutes.")
+            st.stop()
         last = prices.dropna(how="all").index.max()
-        st.title(short[choice])
+        st.title(names[choice])
         st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées) · "
                    f"performance calculée en {currency(strat)}")
         if is_trades(strat):
