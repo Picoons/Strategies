@@ -18,7 +18,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import importlib
+
 import portfolio as pf
+
+# Recharge portfolio.py à chaque exécution : évite qu'une ancienne version reste en mémoire
+# sur Streamlit Cloud après une mise à jour du fichier.
+pf = importlib.reload(pf)
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION DU SITE
