@@ -1,0 +1,65 @@
+{
+  "name": "Daisy - TR",
+  "start": "2026-09-28",
+  "as_of": "2026-09-29",
+  "cash_weight": 0.0,
+  "positions": [
+    {
+      "ticker": "ORA.PA",
+      "name": "Orange",
+      "class": "Télécoms & médias",
+      "weight": 0.3784,
+      "ref_price": 13.795
+    },
+    {
+      "ticker": "BN.PA",
+      "name": "Danone",
+      "class": "Consommation de base",
+      "weight": 0.3239,
+      "ref_price": 59.04
+    },
+    {
+      "ticker": "DG.PA",
+      "name": "Vinci",
+      "class": "Industrie",
+      "weight": 0.2977,
+      "ref_price": 108.55
+    }
+  ],
+  "orders": [
+    {
+      "date": "2026-09-28",
+      "ticker": "DG.PA",
+      "name": "Vinci",
+      "class": "Industrie",
+      "side": "buy",
+      "price": 112.66
+    },
+    {
+      "date": "2026-09-28",
+      "ticker": "BN.PA",
+      "name": "Danone",
+      "class": "Consommation de base",
+      "side": "buy",
+      "price": 60.6
+    },
+    {
+      "date": "2026-09-28",
+      "ticker": "ORA.PA",
+      "name": "Orange",
+      "class": "Télécoms & médias",
+      "side": "buy",
+      "price": 14.34
+    }
+  ],
+  "perf": {
+    "dates": [
+      "2026-09-28",
+      "2026-09-29"
+    ],
+    "twr": [
+      0.0,
+      -0.019999
+    ]
+  }
+}
