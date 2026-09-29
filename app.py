@@ -5,7 +5,7 @@ Lancer en local :   streamlit run app.py
 
 Le site lit uniquement les fichiers JSON du dossier data/ (générés par export_public.py).
 Ils ne contiennent aucun montant ni aucune quantité : seulement les poids en %,
-les prix d'exécution des ordres et la performance en %.
+les prix d'exécution des ordres, les niveaux des trades et la performance en %.
 """
 
 from __future__ import annotations
@@ -38,12 +38,22 @@ DESCRIPTIONS = {
                    "or physique, actions asiatiques et énergie mondiale.",
     "Daisy - TR": "Actions du CAC 40 sélectionnées par un screening hebdomadaire "
                   "basé sur l'indicateur Daisy.",
+    "Picsou ETH - TR": "Stratégie systématique long / short sur Ethereum, "
+                       "100 % du capital engagé sur chaque trade, sans levier.",
 }
 
-COMPARE_OPTION = "Comparer les stratégies"
+# Benchmarks affichés sur la courbe de performance (nom -> ticker Yahoo).
+# Ils sont convertis dans la devise de la stratégie (€ pour Donald et Daisy, $ pour Picsou).
+BENCHMARKS = {
+    "Donald - TR": {"S&P 500": "^GSPC", "CAC 40": "^FCHI"},
+    "Daisy - TR": {"CAC 40": "^FCHI"},
+    "Picsou ETH - TR": {"Ethereum": "ETH-USD"},
+}
 
 CASH_LABEL = "Liquidités"
 STRATEGY_OPTION = "📈 Stratégie"
+COMPARE_OPTION = "Comparer les stratégies"
+SYMBOLS = {"EUR": "€", "USD": "$"}
 
 CLASS_COLORS = {
     "Or": "#d4a017",
@@ -59,10 +69,12 @@ CLASS_COLORS = {
     "Matériaux": "#a16207",
     "Services publics": "#ea580c",
     "Immobilier": "#78716c",
+    "Crypto": "#6366f1",
     CASH_LABEL: "#94a3b8",
 }
 PALETTE = ["#2563eb", "#d4a017", "#dc2626", "#16a34a", "#9333ea", "#0891b2",
            "#db2777", "#65a30d", "#ea580c", "#475569"]
+BENCH_COLORS = ["#f59e0b", "#94a3b8", "#16a34a", "#9333ea"]
 C_LINE = "#0f172a"
 C_POS = "#16a34a"
 C_NEG = "#dc2626"
@@ -85,6 +97,14 @@ def class_color(label: str, i: int) -> str:
     return CLASS_COLORS.get(label, PALETTE[i % len(PALETTE)])
 
 
+def currency(strat: dict) -> str:
+    return strat.get("currency", "EUR")
+
+
+def is_trades(strat: dict) -> bool:
+    return strat.get("type") == "trades"
+
+
 def data_signature() -> tuple:
     """Change dès qu'un fichier de data/ est ajouté ou modifié -> rechargement immédiat."""
     return tuple((f.name, f.stat().st_mtime, f.stat().st_size) for f in sorted(DATA_DIR.glob("*.json")))
@@ -102,9 +122,36 @@ def load_strategies(signature: tuple) -> tuple[dict, list]:
 
 
 @st.cache_data(ttl=3600, show_spinner="Récupération des cours sur Yahoo Finance…")
-def get_prices(tickers: tuple, start: str, signature: tuple = ()) -> pd.DataFrame:
-    return pf.fetch_prices_eur(list(tickers), pd.Timestamp(start))
+def get_prices(tickers: tuple, start: str, ccy: str, signature: tuple = ()) -> pd.DataFrame:
+    return pf.fetch_prices(list(tickers), pd.Timestamp(start), ccy)
 
+
+def strategy_tickers(key: str, strat: dict) -> set:
+    if is_trades(strat):
+        t = {strat["asset"]["ticker"]}
+    else:
+        t = {p["ticker"] for p in strat["positions"]} | {o["ticker"] for o in strat["orders"]}
+    return t | set(BENCHMARKS.get(key, {}).values())
+
+
+def trades_df(strat: dict) -> pd.DataFrame:
+    df = pd.DataFrame(strat["trades"])
+    df["entry_date"] = pd.to_datetime(df["entry_date"])
+    df["exit_date"] = pd.to_datetime(df["exit_date"])
+    df["exit_date"] = df["exit_date"].astype(object).where(df["exit_date"].notna(), None)
+    return df
+
+
+def periods_per_year(strat: dict) -> int:
+    """365 pour la crypto (cotée tous les jours), 252 sinon."""
+    if is_trades(strat) and "-" in strat["asset"]["ticker"]:
+        return 365
+    return 252
+
+
+# ---------------------------------------------------------------------------
+# PERFORMANCE
+# ---------------------------------------------------------------------------
 
 def live_weights(strat: dict, last_px: pd.Series) -> pd.DataFrame:
     """Poids du jour de l'export, mis à jour avec l'évolution des cours depuis."""
@@ -122,11 +169,10 @@ def live_weights(strat: dict, last_px: pd.Series) -> pd.DataFrame:
     return df.sort_values("weight", ascending=False).reset_index(drop=True)
 
 
-def strategy_perf(strat: dict, prices: pd.DataFrame) -> pd.Series | None:
+def portfolio_perf(strat: dict, prices: pd.DataFrame) -> pd.Series | None:
     """
-    Performance cumulée de la stratégie (en décimal, 0.12 = +12 %).
-    - jusqu'à la date d'export : courbe calculée par export_public.py
-    - après : prolongée avec les cours du jour et les poids de l'export
+    Stratégie de portefeuille : courbe calculée par export_public.py jusqu'à la date d'export,
+    puis prolongée avec les cours du jour et les poids de l'export.
     """
     perf = strat.get("perf")
     if not perf or not perf.get("dates"):
@@ -151,17 +197,40 @@ def strategy_perf(strat: dict, prices: pd.DataFrame) -> pd.Series | None:
     return pd.concat([hist, ext])
 
 
-def perf_kpis(perf: pd.Series) -> dict:
+def strategy_perf(strat: dict, prices: pd.DataFrame) -> pd.Series | None:
+    if is_trades(strat):
+        t = strat["asset"]["ticker"]
+        if t not in prices.columns or prices[t].isna().all():
+            return None
+        return pf.trades_perf(trades_df(strat), prices[t])
+    return portfolio_perf(strat, prices)
+
+
+def benchmark_perfs(key: str, prices: pd.DataFrame, index: pd.DatetimeIndex) -> dict:
+    """Performance de chaque benchmark sur la même période que la stratégie."""
+    out = {}
+    for name, t in BENCHMARKS.get(key, {}).items():
+        if t not in prices.columns or prices[t].isna().all():
+            continue
+        px = prices[t].dropna()
+        s = px.reindex(px.index.union(index)).sort_index().ffill().bfill().reindex(index)
+        out[name] = s / s.iloc[0] - 1
+    return out
+
+
+def perf_kpis(perf: pd.Series, ppy: int = 252) -> dict:
     """Rendement total, rendement annualisé, volatilité annualisée, drawdown max."""
-    idx = (1 + perf).asfreq("B").ffill()
+    idx = 1 + perf
+    idx = idx.asfreq("B").ffill() if ppy == 252 else idx.asfreq("D").ffill()
     total = float(idx.iloc[-1] / idx.iloc[0] - 1)
     years = (idx.index[-1] - idx.index[0]).days / 365.25
     annual = (1 + total) ** (1 / years) - 1 if years >= 1 else np.nan
     rets = idx.pct_change().dropna()
-    rets = rets[rets != 0]
-    vol = float(rets.std() * np.sqrt(252)) if len(rets) > 20 else np.nan
+    if ppy == 252:
+        rets = rets[rets != 0]
+    vol = float(rets.std() * np.sqrt(ppy)) if len(rets) > 20 else np.nan
     dd = float((idx / idx.cummax() - 1).min())
-    return {"total": total, "annual": annual, "vol": vol, "max_dd": dd, "years": years}
+    return {"total": total, "annual": annual, "vol": vol, "max_dd": dd}
 
 
 # ---------------------------------------------------------------------------
@@ -193,24 +262,29 @@ def _pct_layout(fig: go.Figure, legend: bool = False) -> go.Figure:
     return fig
 
 
-def chart_strategy(perf: pd.Series, name: str) -> go.Figure:
+def chart_strategy(perf: pd.Series, name: str, benches: dict) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=perf.index, y=perf, name=name, line=dict(color=C_LINE, width=2),
+        x=perf.index, y=perf, name=name, line=dict(color=C_LINE, width=2.2),
         fill="tozeroy", fillcolor="rgba(15,23,42,0.05)",
-        hovertemplate="%{x|%d/%m/%Y}<br>%{y:+.1%}<extra></extra>",
+        hovertemplate="%{y:+.1%}",
     ))
-    return _pct_layout(fig)
+    for i, (bname, s) in enumerate(benches.items()):
+        fig.add_trace(go.Scatter(
+            x=s.index, y=s, name=bname,
+            line=dict(color=BENCH_COLORS[i % len(BENCH_COLORS)], width=1.6, dash="dot"),
+            hovertemplate="%{y:+.1%}",
+        ))
+    return _pct_layout(fig, legend=bool(benches))
 
 
 def chart_asset(ticker: str, name: str, prices: pd.DataFrame, start: pd.Timestamp) -> go.Figure:
     px = prices[ticker].dropna()
     px = px[px.index >= px.index[px.index <= start].max()] if (px.index <= start).any() else px
-    base = float(px.iloc[0])
-    evo = px / base - 1
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=evo.index, y=evo, name=name, line=dict(color="#475569", width=1.6),
-                             hovertemplate="%{x|%d/%m/%Y}<br>%{y:+.1%}<extra></extra>"))
+    evo = px / float(px.iloc[0]) - 1
+    fig = go.Figure(go.Scatter(x=evo.index, y=evo, name=name,
+                               line=dict(color="#475569", width=1.6),
+                               hovertemplate="%{y:+.1%}"))
     return _pct_layout(fig)
 
 
@@ -235,72 +309,104 @@ def chart_target(current: pd.Series, target: dict) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
-# PAGE D'UNE STRATÉGIE
+# BLOCS COMMUNS
 # ---------------------------------------------------------------------------
 
-def render_strategy(key: str, strat: dict, prices: pd.DataFrame):
-    last_px = prices.ffill().iloc[-1]
-    weights = live_weights(strat, last_px)
-    orders = pd.DataFrame(strat["orders"])
-    orders["date"] = pd.to_datetime(orders["date"])
-    start = pd.Timestamp(strat["start"])
-    perf = strategy_perf(strat, prices)
+def exposure(strat: dict, prices: pd.DataFrame) -> tuple[list, list, list]:
+    """Libellés, poids et couleurs du camembert de répartition."""
+    if is_trades(strat):
+        open_t = [t for t in strat["trades"] if t["exit_date"] is None]
+        if open_t:
+            side = open_t[0]["side"]
+            return ([f"{strat['asset']['name']} ({'long' if side == 'long' else 'short'})"], [1.0],
+                    [C_POS if side == "long" else C_NEG])
+        return [CASH_LABEL], [1.0], [CLASS_COLORS[CASH_LABEL]]
+    w = live_weights(strat, prices.ffill().iloc[-1])
+    by_class = w.groupby("class", sort=False)["weight"].sum().sort_values(ascending=False)
+    return (by_class.index.tolist(), by_class.values.tolist(),
+            [class_color(l, i) for i, l in enumerate(by_class.index)])
 
-    if key in DESCRIPTIONS:
-        st.markdown(DESCRIPTIONS[key])
 
-    c = st.columns(3)
-    c[0].metric("Lancement", f"{start:%d/%m/%Y}")
-    c[1].metric("Ordres passés", len(orders))
-    c[2].metric("Lignes en portefeuille", len(strat["positions"]))
-
-    # --- Répartition (gauche) + évolution en % (droite)
-    by_class = weights.groupby("class", sort=False)["weight"].sum().sort_values(ascending=False)
+def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | None,
+               benches: dict, assets: dict, donut_title: str):
+    """Camembert à gauche, évolution en % à droite."""
+    labels, values, colors = exposure(strat, prices)
     left, right = st.columns(2)
     with left:
-        st.subheader("Répartition actuelle")
-        st.plotly_chart(
-            chart_donut(by_class.index.tolist(), by_class.values.tolist(),
-                        [class_color(l, i) for i, l in enumerate(by_class.index)]),
-            width="stretch", key=f"cls_{key}")
+        st.subheader(donut_title)
+        st.plotly_chart(chart_donut(labels, values, colors), width="stretch", key=f"donut_{key}")
     with right:
         st.subheader("Évolution")
-        traded = orders.drop_duplicates("ticker")[["ticker", "name"]]
-        assets = dict(zip(traded["name"], traded["ticker"]))
         options = ([STRATEGY_OPTION] if perf is not None else []) + list(assets.keys())
         choice = st.selectbox("Afficher", options, key=f"sel_{key}", label_visibility="collapsed")
         if choice == STRATEGY_OPTION:
-            st.plotly_chart(chart_strategy(perf, key), width="stretch",
-                            key=f"perf_{key}")
-        elif assets[choice] in prices.columns:
-            st.plotly_chart(chart_asset(assets[choice], choice, prices, start),
+            st.plotly_chart(chart_strategy(perf, key.split(" - ")[0], benches),
+                            width="stretch", key=f"perf_{key}")
+        elif assets.get(choice) in prices.columns:
+            st.plotly_chart(chart_asset(assets[choice], choice, prices, pd.Timestamp(strat["start"])),
                             width="stretch", key=f"asset_{key}")
             st.caption("Évolution du cours depuis le lancement de la stratégie.")
 
-    # --- KPI de performance
-    if perf is not None:
-        k = perf_kpis(perf)
-        st.subheader("Performance")
-        c = st.columns(4)
-        c[0].metric("Rendement total", pct(k["total"]),
-                    help="Performance cumulée depuis le lancement, pondérée par le temps "
-                         "(les apports d'argent ne la faussent pas).")
-        c[1].metric("Rendement annualisé", pct(k["annual"]),
-                    help="Rendement moyen par an. Affiché à partir d'un an d'historique.")
-        c[2].metric("Volatilité annualisée", pct(k["vol"], sign=False),
-                    help="Écart-type des rendements quotidiens × √252.")
-        c[3].metric("Drawdown max", pct(k["max_dd"], sign=False),
-                    help="Plus forte baisse depuis un plus haut.")
-    else:
-        st.info("Relance `python export_public.py` pour publier la courbe de performance.")
 
-    # --- Cible
+def render_kpis(strat: dict, perf: pd.Series | None, benches: dict):
+    if perf is None:
+        st.info("Relance `python export_public.py` pour publier la courbe de performance.")
+        return
+    ppy = periods_per_year(strat)
+    k = perf_kpis(perf, ppy)
+    st.subheader("Performance")
+    c = st.columns(4)
+    c[0].metric("Rendement total", pct(k["total"]),
+                help="Performance cumulée depuis le lancement, pondérée par le temps "
+                     "(les apports d'argent ne la faussent pas).")
+    c[1].metric("Rendement annualisé", pct(k["annual"]),
+                help="Rendement moyen par an. Affiché à partir d'un an d'historique.")
+    c[2].metric("Volatilité annualisée", pct(k["vol"], sign=False),
+                help=f"Écart-type des rendements quotidiens × √{ppy}.")
+    c[3].metric("Drawdown max", pct(k["max_dd"], sign=False),
+                help="Plus forte baisse depuis un plus haut.")
+
+    if benches:
+        c = st.columns(4)
+        for i, (name, s) in enumerate(benches.items()):
+            b = perf_kpis(s, ppy)
+            diff = (k["total"] - b["total"]) * 100
+            c[i % 4].metric(f"{name} sur la même période", pct(b["total"]),
+                            delta=f"{diff:+.1f} pts pour la stratégie".replace(".", ","),
+                            help=f"Drawdown max de l'indice : {pct(b['max_dd'], sign=False)}")
+
+
+# ---------------------------------------------------------------------------
+# PAGE : STRATÉGIE DE PORTEFEUILLE (Donald, Daisy…)
+# ---------------------------------------------------------------------------
+
+def render_portfolio_strategy(key: str, strat: dict, prices: pd.DataFrame):
+    sym = SYMBOLS.get(currency(strat), currency(strat))
+    last_px = prices.ffill().iloc[-1]
+    orders = pd.DataFrame(strat["orders"])
+    orders["date"] = pd.to_datetime(orders["date"])
+    perf = strategy_perf(strat, prices)
+    benches = benchmark_perfs(key, prices, perf.index) if perf is not None else {}
+
+    if key in DESCRIPTIONS:
+        st.markdown(DESCRIPTIONS[key])
+    c = st.columns(3)
+    c[0].metric("Lancement", f"{pd.Timestamp(strat['start']):%d/%m/%Y}")
+    c[1].metric("Ordres passés", len(orders))
+    c[2].metric("Lignes en portefeuille", len(strat["positions"]))
+
+    traded = orders.drop_duplicates("ticker")[["ticker", "name"]]
+    render_top(key, strat, prices, perf, benches, dict(zip(traded["name"], traded["ticker"])),
+               "Répartition actuelle")
+    render_kpis(strat, perf, benches)
+
     target = TARGET_ALLOCATION.get(key)
     if target:
+        w = live_weights(strat, last_px)
+        by_class = w.groupby("class", sort=False)["weight"].sum()
         st.subheader("Allocation actuelle vs cible")
         st.plotly_chart(chart_target(by_class, target), width="stretch", key=f"tgt_{key}")
 
-    # --- Historique des ordres
     st.subheader("Historique des ordres")
     table = orders.copy()
     table["Cours actuel"] = table["ticker"].map(last_px)
@@ -310,55 +416,114 @@ def render_strategy(key: str, strat: dict, prices: pd.DataFrame):
                                   "ticker": "Ticker", "price": "Prix d'exécution"})
     table = table[["Date", "Sens", "Actif", "Classe", "Ticker", "Prix d'exécution",
                    "Cours actuel", "Variation depuis l'ordre"]].sort_values("Date", ascending=False)
+    show_table(table, "Variation depuis l'ordre", {
+        "Date": st.column_config.DateColumn(format="DD/MM/YYYY"),
+        "Prix d'exécution": st.column_config.NumberColumn(format=f"%.2f {sym}"),
+        "Cours actuel": st.column_config.NumberColumn(format=f"%.2f {sym}"),
+        "Variation depuis l'ordre": st.column_config.NumberColumn(format="%+.1f %%"),
+    })
+    st.caption("Variation depuis l'ordre = cours actuel / prix d'exécution − 1. "
+               "Pour une vente, une variation négative signifie que la sortie était bien placée.")
 
+
+# ---------------------------------------------------------------------------
+# PAGE : STRATÉGIE DE TRADING (Picsou…)
+# ---------------------------------------------------------------------------
+
+def render_trades_strategy(key: str, strat: dict, prices: pd.DataFrame):
+    sym = SYMBOLS.get(currency(strat), currency(strat))
+    asset = strat["asset"]
+    trades = trades_df(strat)
+    last = float(prices[asset["ticker"]].dropna().iloc[-1]) if asset["ticker"] in prices.columns else np.nan
+    perf = strategy_perf(strat, prices)
+    benches = benchmark_perfs(key, prices, perf.index) if perf is not None else {}
+
+    # Résultat de chaque trade (en cours : au dernier cours)
+    closed = trades["exit_date"].notna()
+    trades["result"] = [
+        pf.trade_return(t["side"], t["entry_price"], t["exit_price"] if c else last)
+        for (_, t), c in zip(trades.iterrows(), closed)
+    ]
+    wins = int((trades.loc[closed, "result"] > 0).sum())
+    n_closed = int(closed.sum())
+
+    if key in DESCRIPTIONS:
+        st.markdown(DESCRIPTIONS[key])
+    c = st.columns(3)
+    c[0].metric("Lancement", f"{pd.Timestamp(strat['start']):%d/%m/%Y}")
+    c[1].metric("Trades", len(trades), help=f"{n_closed} clôturés, {len(trades) - n_closed} en cours")
+    c[2].metric("Taux de réussite", pct(wins / n_closed, sign=False, decimals=0) if n_closed else "—",
+                help=f"{wins} gagnants sur {n_closed} trades clôturés")
+
+    render_top(key, strat, prices, perf, benches, {asset["name"]: asset["ticker"]}, "Position actuelle")
+    render_kpis(strat, perf, benches)
+
+    st.subheader("Historique des trades")
+    today = pd.Timestamp.today().normalize()
+    table = pd.DataFrame({
+        "Entrée": trades["entry_date"],
+        "Sortie": [pd.Timestamp(d).strftime("%d/%m/%Y") if c else "En cours"
+                   for d, c in zip(trades["exit_date"], closed)],
+        "Sens": trades["side"].map({"long": "🟢 Long", "short": "🔴 Short"}),
+        "Prix d'entrée": trades["entry_price"],
+        "Prix de sortie": [t["exit_price"] if c else last for (_, t), c in zip(trades.iterrows(), closed)],
+        "Résultat": trades["result"] * 100,
+        "Durée (jours)": [((pd.Timestamp(t["exit_date"]) if c else today) - t["entry_date"]).days
+                          for (_, t), c in zip(trades.iterrows(), closed)],
+    }).sort_values("Entrée", ascending=False)
+    show_table(table, "Résultat", {
+        "Entrée": st.column_config.DateColumn(format="DD/MM/YYYY"),
+        "Prix d'entrée": st.column_config.NumberColumn(format=f"%.2f {sym}"),
+        "Prix de sortie": st.column_config.NumberColumn(format=f"%.2f {sym}"),
+        "Résultat": st.column_config.NumberColumn(format="%+.2f %%"),
+    })
+    st.caption("Pour un trade en cours, le prix de sortie est le dernier cours connu. "
+               "Résultat d'un short = 1 − prix de sortie / prix d'entrée.")
+
+
+def show_table(table: pd.DataFrame, color_col: str, config: dict):
     def color_var(v):
         if isinstance(v, (int, float)) and not np.isnan(v):
             return f"color: {C_POS}" if v > 0 else f"color: {C_NEG}"
         return ""
 
     st.dataframe(
-        table.style.map(color_var, subset=["Variation depuis l'ordre"]),
+        table.style.map(color_var, subset=[color_col]),
         hide_index=True,
         width="stretch",
         height=min(38 + 35 * len(table), 800),
-        column_config={
-            "Date": st.column_config.DateColumn(format="DD/MM/YYYY"),
-            "Prix d'exécution": st.column_config.NumberColumn(format="%.2f €"),
-            "Cours actuel": st.column_config.NumberColumn(format="%.2f €"),
-            "Variation depuis l'ordre": st.column_config.NumberColumn(format="%+.1f %%"),
-        },
+        column_config=config,
     )
-    st.caption("Variation depuis l'ordre = cours actuel / prix d'exécution − 1. "
-               "Pour une vente, une variation négative signifie que la sortie était bien placée.")
 
 
-def render_overview(strategies: dict, prices: pd.DataFrame):
-    last_px = prices.ffill().iloc[-1]
+# ---------------------------------------------------------------------------
+# PAGE : COMPARAISON
+# ---------------------------------------------------------------------------
+
+def render_overview(strategies: dict, prices_for):
     cols = st.columns(len(strategies))
+    series = {}
     for col, (key, strat) in zip(cols, strategies.items()):
-        w = live_weights(strat, last_px)
-        by_class = w.groupby("class", sort=False)["weight"].sum().sort_values(ascending=False)
+        prices = prices_for(key)
         perf = strategy_perf(strat, prices)
+        labels, values, colors = exposure(strat, prices)
         with col:
-            st.markdown(f"**{key}**")
-            st.caption(f"Depuis le {pd.Timestamp(strat['start']):%d/%m/%Y} · {len(strat['orders'])} ordres")
+            st.markdown(f"**{key.split(' - ')[0]}**")
+            st.caption(f"Depuis le {pd.Timestamp(strat['start']):%d/%m/%Y} · devise {currency(strat)}")
             if perf is not None:
-                st.metric("Rendement total", pct(perf_kpis(perf)["total"]))
-            st.plotly_chart(
-                chart_donut(by_class.index.tolist(), by_class.values.tolist(),
-                            [class_color(l, i) for i, l in enumerate(by_class.index)]),
-                width="stretch", key=f"ov_{key}")
+                series[key.split(" - ")[0]] = perf
+                st.metric("Rendement total", pct(perf_kpis(perf, periods_per_year(strat))["total"]))
+            st.plotly_chart(chart_donut(labels, values, colors), width="stretch", key=f"ov_{key}")
 
-    series = {k: strategy_perf(s, prices) for k, s in strategies.items()}
-    series = {k: v for k, v in series.items() if v is not None}
     if series:
         fig = go.Figure()
         for i, (k, s) in enumerate(series.items()):
             fig.add_trace(go.Scatter(x=s.index, y=s, name=k,
                                      line=dict(color=PALETTE[i % len(PALETTE)], width=2),
-                                     hovertemplate="%{x|%d/%m/%Y}<br>%{y:+.1%}<extra></extra>"))
+                                     hovertemplate="%{y:+.1%}"))
         st.subheader("Évolution comparée")
         st.plotly_chart(_pct_layout(fig, legend=True), width="stretch", key="ov_perf")
+        st.caption("Chaque courbe part de la date de lancement de sa stratégie, dans sa propre devise.")
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +531,8 @@ def render_overview(strategies: dict, prices: pd.DataFrame):
 # ---------------------------------------------------------------------------
 
 def main():
-    strategies, errors = load_strategies(data_signature())
+    sig = data_signature()
+    strategies, errors = load_strategies(sig)
     for e in errors:
         st.error(e)
     if not strategies:
@@ -374,25 +540,33 @@ def main():
         st.info("Aucune stratégie publiée. Lance `python export_public.py` pour générer les fichiers de data/.")
         st.stop()
 
-    tickers = set()
-    for s in strategies.values():
-        tickers |= {p["ticker"] for p in s["positions"]} | {o["ticker"] for o in s["orders"]}
-    start = min(pd.Timestamp(s["start"]) for s in strategies.values())
+    # Cours regroupés par devise (EUR pour Donald et Daisy, USD pour Picsou…)
+    by_ccy: dict[str, set] = {}
+    starts: dict[str, pd.Timestamp] = {}
+    for key, s in strategies.items():
+        ccy = currency(s)
+        by_ccy.setdefault(ccy, set()).update(strategy_tickers(key, s))
+        starts[ccy] = min(starts.get(ccy, pd.Timestamp(s["start"])), pd.Timestamp(s["start"]))
 
+    prices_by_ccy = {}
     try:
-        prices = get_prices(tuple(sorted(tickers)), str(start.date()), data_signature())
+        for ccy, tickers in by_ccy.items():
+            prices_by_ccy[ccy] = get_prices(tuple(sorted(tickers)), str(starts[ccy].date()), ccy, sig)
     except Exception as e:
         st.error(f"Impossible de récupérer les cours : {e}")
         st.stop()
 
-    last = prices.dropna(how="all").index.max()
+    def prices_for(key: str) -> pd.DataFrame:
+        return prices_by_ccy[currency(strategies[key])]
 
     # --- Menu de sélection de la stratégie (lien partageable : ?strategie=Daisy)
     keys = list(strategies.keys())
     options = keys + ([COMPARE_OPTION] if len(keys) > 1 else [])
     short = {k: k.split(" - ")[0].strip() for k in keys}
     wanted = st.query_params.get("strategie", "")
-    default = next((i for i, k in enumerate(keys) if short[k].lower() == wanted.lower()), 0)
+    w = wanted.strip().lower()
+    default = next((i for i, k in enumerate(keys)
+                    if w and (short[k].lower() == w or short[k].lower().split()[0] == w)), 0)
     if wanted.lower() == "comparaison" and len(keys) > 1:
         default = len(keys)
     col, _ = st.columns([1, 3])
@@ -402,15 +576,22 @@ def main():
 
     if choice == COMPARE_OPTION:
         st.title("Comparaison des stratégies")
-        st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées)")
-        render_overview(strategies, prices)
+        render_overview(strategies, prices_for)
     else:
+        prices = prices_for(choice)
+        strat = strategies[choice]
+        last = prices.dropna(how="all").index.max()
         st.title(short[choice])
-        st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées)")
-        render_strategy(choice, strategies[choice], prices)
+        st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées) · "
+                   f"performance calculée en {currency(strat)}")
+        if is_trades(strat):
+            render_trades_strategy(choice, strat, prices)
+        else:
+            render_portfolio_strategy(choice, strat, prices)
 
     st.divider()
     st.caption("Stratégies personnelles présentées à titre informatif, hors frais et fiscalité. "
+               "Les indices de référence sont hors dividendes. "
                "Ceci ne constitue pas un conseil en investissement.")
 
 

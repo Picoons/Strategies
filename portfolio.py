@@ -54,8 +54,17 @@ DISPLAY_NAME = {
 # Réglages propres à chaque stratégie (clé = nom du fichier Excel sans extension)
 #   unit_price : True si la colonne "P revient" contient le prix UNITAIRE (sinon = montant total)
 #   suffix     : suffixe Yahoo ajouté aux tickers écrits sans place de cotation (DG -> DG.PA)
+#   format="trades" : journal de trades transposé (une colonne par trade : Entry date,
+#                     Entry level, Direction Long/Short, Exit date, Exit level)
 STRATEGY_SETTINGS = {
     "Daisy - TR": {"unit_price": True, "suffix": ".PA"},
+    "Picsou ETH - TR": {
+        "format": "trades",
+        "ticker": "ETH-USD",
+        "name": "Ethereum",
+        "class": "Crypto",
+        "currency": "USD",
+    },
 }
 
 # Traduction des secteurs Yahoo (utilisée quand un ticker n'est pas dans ASSET_CLASS)
@@ -223,6 +232,104 @@ def load_transactions(source, settings: dict | None = None,
     return tx
 
 
+# ---------------------------------------------------------------------------
+# STRATÉGIES DE TRADING (journal de trades, sans quantités)
+# ---------------------------------------------------------------------------
+
+TRADE_ROWS = {
+    "entry_date": ("entry date", "date d'entree", "date entree"),
+    "entry_price": ("entry level", "entry price", "prix d'entree", "niveau d'entree"),
+    "side": ("direction", "sens"),
+    "exit_date": ("exit date", "date de sortie", "date sortie"),
+    "exit_price": ("exit level", "exit price", "prix de sortie", "niveau de sortie"),
+}
+
+
+def load_trades(source) -> pd.DataFrame:
+    """
+    Lit un journal de trades transposé (une colonne par trade).
+    Les lignes non reconnues (durée, P&L, winrate...) sont ignorées.
+    Renvoie : entry_date, entry_price, side (long/short), exit_date, exit_price
+    (exit_* vides si le trade est encore ouvert).
+    """
+    raw = pd.read_excel(source, header=None)
+    labels = {normalize(v): i for i, v in raw.iloc[:, 0].items() if pd.notna(v)}
+    rows = {}
+    for key, aliases in TRADE_ROWS.items():
+        idx = next((labels[a] for a in aliases if a in labels), None)
+        if idx is None and key in ("entry_date", "entry_price", "side"):
+            raise ValueError(f"Ligne '{aliases[0]}' introuvable dans le journal de trades.")
+        rows[key] = idx
+
+    trades = []
+    for col in range(1, raw.shape[1]):
+        def cell(key):
+            i = rows.get(key)
+            return raw.iat[i, col] if i is not None else None
+
+        entry_date = pd.to_datetime(cell("entry_date"), errors="coerce")
+        entry_price = pd.to_numeric(cell("entry_price"), errors="coerce")
+        side = normalize(cell("side"))
+        if pd.isna(entry_date) or pd.isna(entry_price) or side not in ("long", "short"):
+            continue
+        exit_date = pd.to_datetime(cell("exit_date"), errors="coerce")
+        exit_price = pd.to_numeric(cell("exit_price"), errors="coerce")
+        closed = pd.notna(exit_date) and pd.notna(exit_price)
+        trades.append({
+            "entry_date": entry_date.normalize(),
+            "entry_price": float(entry_price),
+            "side": side,
+            "exit_date": exit_date.normalize() if closed else None,
+            "exit_price": float(exit_price) if closed else None,
+        })
+    if not trades:
+        raise ValueError("Aucun trade lu dans le fichier.")
+    df = pd.DataFrame(trades).sort_values("entry_date", kind="stable").reset_index(drop=True)
+    open_count = df["exit_date"].isna().sum()
+    if open_count > 1:
+        raise ValueError("Plusieurs trades ouverts en même temps : un seul est autorisé.")
+    return df
+
+
+def trade_return(side: str, entry: float, price: float) -> float:
+    """Rendement d'un trade (en décimal) au prix `price`."""
+    return price / entry - 1 if side == "long" else 1 - price / entry
+
+
+def trades_perf(trades: pd.DataFrame, px: pd.Series, end=None) -> pd.Series:
+    """
+    Performance cumulée d'une stratégie de trading à 100 % du capital :
+    - en position : suit le sous-jacent (long) ou son inverse (short), sans levier ;
+    - hors position : capital inchangé ;
+    - entrées et sorties aux niveaux indiqués dans le journal, clôtures quotidiennes entre les deux.
+    """
+    px = px.dropna()
+    px.index = pd.to_datetime(px.index).normalize()
+    end = pd.Timestamp(end or px.index.max()).normalize()
+    start = pd.Timestamp(trades["entry_date"].min())
+    grid = pd.date_range(start, end, freq="D")
+    close = px.reindex(px.index.union(grid)).sort_index().ffill().bfill().reindex(grid)
+
+    equity = pd.Series(np.nan, index=grid)
+    eq = 1.0
+    for _, t in trades.iterrows():
+        e_d = pd.Timestamp(t["entry_date"])
+        x_d = pd.Timestamp(t["exit_date"]) if t["exit_date"] is not None and pd.notna(t["exit_date"]) else None
+        last_day = min(x_d, end) if x_d is not None else end
+        if e_d > end:
+            break
+        days = pd.date_range(e_d, last_day, freq="D")
+        for d in days:
+            if x_d is not None and d == x_d:
+                equity[d] = eq * (1 + trade_return(t["side"], t["entry_price"], t["exit_price"]))
+            else:
+                equity[d] = eq * (1 + trade_return(t["side"], t["entry_price"], close[d]))
+        if x_d is not None and x_d <= end:
+            eq = eq * (1 + trade_return(t["side"], t["entry_price"], t["exit_price"]))
+    equity.iloc[0] = equity.iloc[0] if pd.notna(equity.iloc[0]) else 1.0
+    return equity.ffill() - 1
+
+
 def unknown_assets(tx: pd.DataFrame) -> list[str]:
     """Actifs achetés/vendus sans ticker Yahoo associé."""
     m = tx["kind"].isin(["buy", "sell"]) & (tx["ticker"] == "")
@@ -262,8 +369,13 @@ def asset_class(ticker: str) -> str:
 
 
 def fetch_prices_eur(tickers: list[str], start: pd.Timestamp) -> pd.DataFrame:
+    """Cours de clôture convertis en EUR."""
+    return fetch_prices(tickers, start, "EUR")
+
+
+def fetch_prices(tickers: list[str], start: pd.Timestamp, target: str = "EUR") -> pd.DataFrame:
     """
-    Télécharge les cours de clôture et les convertit en EUR.
+    Télécharge les cours de clôture et les convertit dans la devise `target` (EUR, USD...).
     Renvoie un DataFrame (index = dates, colonnes = tickers).
     """
     import yfinance as yf
@@ -293,10 +405,11 @@ def fetch_prices_eur(tickers: list[str], start: pd.Timestamp) -> pd.DataFrame:
         currencies[t] = cur or guess_currency(t)
 
     # Taux de change vers EUR
-    needed = sorted({c for c in currencies.values() if c not in ("EUR",)})
+    needed = sorted({c for c in currencies.values() if c != target})
     fx = {}
     if needed:
-        fx_tickers = {c: ("GBPEUR=X" if c in ("GBp", "GBX") else f"{c.upper()}EUR=X") for c in needed}
+        fx_tickers = {c: (f"GBP{target}=X" if c in ("GBp", "GBX") else f"{c.upper()}{target}=X")
+                      for c in needed}
         fx_data = yf.download(
             sorted(set(fx_tickers.values())), start=start, auto_adjust=False, progress=False
         )["Close"]
@@ -312,7 +425,7 @@ def fetch_prices_eur(tickers: list[str], start: pd.Timestamp) -> pd.DataFrame:
     for t in tickers:
         s = close[t] if t in close.columns else pd.Series(np.nan, index=close.index)
         cur = currencies[t]
-        if cur != "EUR":
+        if cur != target:
             rate = fx[cur].reindex(out.index.union(fx[cur].index)).ffill().reindex(out.index)
             s = s * rate
         out[t] = s
