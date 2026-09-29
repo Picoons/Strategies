@@ -51,6 +51,28 @@ DISPLAY_NAME = {
     "XDW0.DE": "Xtrackers MSCI World Energy",
 }
 
+# Réglages propres à chaque stratégie (clé = nom du fichier Excel sans extension)
+#   unit_price : True si la colonne "P revient" contient le prix UNITAIRE (sinon = montant total)
+#   suffix     : suffixe Yahoo ajouté aux tickers écrits sans place de cotation (DG -> DG.PA)
+STRATEGY_SETTINGS = {
+    "Daisy - TR": {"unit_price": True, "suffix": ".PA"},
+}
+
+# Traduction des secteurs Yahoo (utilisée quand un ticker n'est pas dans ASSET_CLASS)
+SECTOR_FR = {
+    "Industrials": "Industrie",
+    "Consumer Defensive": "Consommation de base",
+    "Consumer Cyclical": "Consommation cyclique",
+    "Communication Services": "Télécoms & médias",
+    "Technology": "Technologie",
+    "Financial Services": "Finance",
+    "Healthcare": "Santé",
+    "Energy": "Énergie",
+    "Basic Materials": "Matériaux",
+    "Utilities": "Services publics",
+    "Real Estate": "Immobilier",
+}
+
 # Benchmarks proposés dans l'interface (nom -> ticker Yahoo)
 BENCHMARKS = {
     "MSCI World (EUNL.DE)": "EUNL.DE",
@@ -111,11 +133,25 @@ def _find_columns(df: pd.DataFrame) -> dict:
     return found
 
 
-def load_transactions(source, ticker_map: dict | None = None) -> pd.DataFrame:
+def _add_suffix(ticker: str, suffix: str) -> str:
+    if ticker and suffix and not any(c in ticker for c in ".-^="):
+        return ticker.upper() + suffix
+    return ticker
+
+
+def load_transactions(source, settings: dict | None = None,
+                      ticker_map: dict | None = None) -> pd.DataFrame:
     """
     Lit un Excel de transactions et renvoie un DataFrame normalisé :
-    date, asset, ticker, kind (deposit/withdraw/buy/sell/dividend), qty, amount
+    date, asset, ticker, kind (deposit/withdraw/buy/sell/dividend), qty, amount (montant total)
+
+    - Sans colonne "Direction" : quantité positive = achat, négative = vente.
+    - settings["unit_price"] : la colonne "P revient" est un prix unitaire.
+    - settings["suffix"] : suffixe ajouté aux tickers sans place de cotation.
     """
+    settings = settings or {}
+    unit_price = settings.get("unit_price", False)
+    suffix = settings.get("suffix", "")
     ticker_map = ticker_map or TICKER_MAP
     norm_map = {normalize(k): v for k, v in ticker_map.items()}
 
@@ -139,6 +175,8 @@ def load_transactions(source, ticker_map: dict | None = None) -> pd.DataFrame:
         if pd.isna(amount):
             continue
         amount = abs(float(amount))
+        signed_qty = float(qty) if pd.notna(qty) else np.nan
+        qty = abs(signed_qty) if pd.notna(signed_qty) else np.nan
 
         if _starts_with_any(asset_n, DEPOSIT_WORDS) or _starts_with_any(direction_n, DEPOSIT_WORDS):
             kind = "deposit"
@@ -150,14 +188,19 @@ def load_transactions(source, ticker_map: dict | None = None) -> pd.DataFrame:
             kind = "sell"
         elif _starts_with_any(direction_n, BUY_WORDS):
             kind = "buy"
+        elif not direction_n and pd.notna(signed_qty) and signed_qty != 0:
+            kind = "buy" if signed_qty > 0 else "sell"
         else:
             raise ValueError(f"Ligne non reconnue ({date.date()} - {asset} - {direction_n!r})")
 
         if kind in ("buy", "sell"):
             if not ticker:
                 ticker = norm_map.get(asset_n, "")
+            ticker = _add_suffix(ticker, suffix)
             if pd.isna(qty) or qty <= 0:
                 raise ValueError(f"Quantité manquante ({date.date()} - {asset})")
+            if unit_price:
+                amount = amount * qty
 
         rows.append(
             {
@@ -186,16 +229,6 @@ def unknown_assets(tx: pd.DataFrame) -> list[str]:
     return sorted(tx.loc[m, "asset"].unique().tolist())
 
 
-def load_folder(folder: Path) -> dict[str, pd.DataFrame]:
-    """Charge tous les .xlsx d'un dossier. Nom de stratégie = nom du fichier."""
-    out = {}
-    for f in sorted(Path(folder).glob("*.xlsx")):
-        if f.name.startswith("~$"):
-            continue
-        out[f.stem] = load_transactions(f)
-    return out
-
-
 # ---------------------------------------------------------------------------
 # PRIX (yfinance) ET CONVERSION EN EUR
 # ---------------------------------------------------------------------------
@@ -212,6 +245,20 @@ def guess_currency(ticker: str) -> str:
         "MC": "EUR", "LS": "EUR", "VI": "EUR", "HE": "EUR", "IR": "EUR",
         "L": "GBp", "SW": "CHF", "HK": "HKD", "T": "JPY", "TO": "CAD",
     }.get(suffix, "USD")
+
+
+def asset_class(ticker: str) -> str:
+    """Classe d'actif : ASSET_CLASS en priorité, sinon secteur Yahoo traduit, sinon "Autre"."""
+    if ticker in ASSET_CLASS:
+        return ASSET_CLASS[ticker]
+    try:
+        import yfinance as yf
+        sector = yf.Ticker(ticker).info.get("sector")
+        if sector:
+            return SECTOR_FR.get(sector, sector)
+    except Exception:
+        pass
+    return "Autre"
 
 
 def fetch_prices_eur(tickers: list[str], start: pd.Timestamp) -> pd.DataFrame:
@@ -318,6 +365,13 @@ def compute_strategy(name: str, tx: pd.DataFrame, prices: pd.DataFrame,
             cash_delta[d] -= a
         elif r["kind"] in ("sell", "dividend"):
             cash_delta[d] += a
+    # Stratégie sans lignes de dépôt : chaque achat est considéré comme financé
+    # par un apport du même montant (et chaque vente comme un retrait).
+    if not (tx["kind"] == "deposit").any():
+        for _, r in tx[tx["kind"].isin(["buy", "sell"])].iterrows():
+            a = r["amount"] if r["kind"] == "buy" else -r["amount"]
+            cash_delta[r["date"]] += a
+            flow[r["date"]] += a
     cash = cash_delta.cumsum()
     net_deposits = flow.cumsum()
 

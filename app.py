@@ -36,7 +36,11 @@ TARGET_ALLOCATION = {
 DESCRIPTIONS = {
     "Donald - TR": "Portefeuille d'ETF équipondéré en trois blocs : "
                    "or physique, actions asiatiques et énergie mondiale.",
+    "Daisy - TR": "Actions du CAC 40 sélectionnées par un screening hebdomadaire "
+                  "basé sur l'indicateur Daisy.",
 }
+
+COMPARE_OPTION = "Comparer les stratégies"
 
 CASH_LABEL = "Liquidités"
 STRATEGY_OPTION = "📈 Stratégie"
@@ -45,6 +49,16 @@ CLASS_COLORS = {
     "Or": "#d4a017",
     "Asie": "#dc2626",
     "Énergie": "#2563eb",
+    "Industrie": "#0891b2",
+    "Consommation de base": "#16a34a",
+    "Consommation cyclique": "#65a30d",
+    "Télécoms & médias": "#9333ea",
+    "Technologie": "#4f46e5",
+    "Finance": "#0f766e",
+    "Santé": "#db2777",
+    "Matériaux": "#a16207",
+    "Services publics": "#ea580c",
+    "Immobilier": "#78716c",
     CASH_LABEL: "#94a3b8",
 }
 PALETTE = ["#2563eb", "#d4a017", "#dc2626", "#16a34a", "#9333ea", "#0891b2",
@@ -167,11 +181,15 @@ def chart_donut(labels: list, values: list, colors: list) -> go.Figure:
 
 
 def _pct_layout(fig: go.Figure, legend: bool = False) -> go.Figure:
+    ys = [v for tr in fig.data for v in (tr.y if tr.y is not None else [])]
+    span = (max(ys) - min(ys)) if ys else 1
+    fig.update_yaxes(tickformat="+.1%" if span < 0.06 else "+.0%")
+    fig.update_xaxes(tickformat="%d/%m/%y")
     fig.add_hline(y=0, line=dict(color="#cbd5e1", width=1))
     fig.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10), hovermode="x unified",
                       showlegend=legend,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-                      separators=", ", yaxis=dict(tickformat="+.0%"))
+                      separators=", ")
     return fig
 
 
@@ -271,7 +289,7 @@ def render_strategy(key: str, strat: dict, prices: pd.DataFrame):
                     help="Rendement moyen par an. Affiché à partir d'un an d'historique.")
         c[2].metric("Volatilité annualisée", pct(k["vol"], sign=False),
                     help="Écart-type des rendements quotidiens × √252.")
-        c[3].metric("Drawdown max", pct(k["max_dd"]),
+        c[3].metric("Drawdown max", pct(k["max_dd"], sign=False),
                     help="Plus forte baisse depuis un plus haut.")
     else:
         st.info("Relance `python export_public.py` pour publier la courbe de performance.")
@@ -369,20 +387,27 @@ def main():
 
     last = prices.dropna(how="all").index.max()
 
-    if len(strategies) == 1:
-        key, strat = next(iter(strategies.items()))
-        st.title(key)
+    # --- Menu de sélection de la stratégie (lien partageable : ?strategie=Daisy)
+    keys = list(strategies.keys())
+    options = keys + ([COMPARE_OPTION] if len(keys) > 1 else [])
+    short = {k: k.split(" - ")[0].strip() for k in keys}
+    wanted = st.query_params.get("strategie", "")
+    default = next((i for i, k in enumerate(keys) if short[k].lower() == wanted.lower()), 0)
+    if wanted.lower() == "comparaison" and len(keys) > 1:
+        default = len(keys)
+    col, _ = st.columns([1, 3])
+    choice = col.selectbox("Stratégie", options, index=default,
+                           format_func=lambda k: short.get(k, k))
+    st.query_params["strategie"] = short.get(choice, "comparaison")
+
+    if choice == COMPARE_OPTION:
+        st.title("Comparaison des stratégies")
         st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées)")
-        render_strategy(key, strat, prices)
+        render_overview(strategies, prices)
     else:
-        st.title(f"📈 {SITE_TITLE}")
+        st.title(short[choice])
         st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées)")
-        tabs = st.tabs(["Vue d'ensemble"] + list(strategies.keys()))
-        with tabs[0]:
-            render_overview(strategies, prices)
-        for tab, (key, strat) in zip(tabs[1:], strategies.items()):
-            with tab:
-                render_strategy(key, strat, prices)
+        render_strategy(choice, strategies[choice], prices)
 
     st.divider()
     st.caption("Stratégies personnelles présentées à titre informatif, hors frais et fiscalité. "
