@@ -526,40 +526,6 @@ def show_table(table: pd.DataFrame, color_col: str, config: dict):
 
 
 # ---------------------------------------------------------------------------
-# PAGE : COMPARAISON
-# ---------------------------------------------------------------------------
-
-def render_overview(strategies: dict, prices_for):
-    cols = st.columns(len(strategies))
-    series = {}
-    for col, (key, strat) in zip(cols, strategies.items()):
-        prices = prices_for(key)
-        perf = strategy_perf(strat, prices)
-        labels, values, colors = exposure(strat, prices)
-        with col:
-            st.markdown(f"**{display_name(key)}**")
-            st.caption(f"Depuis le {pd.Timestamp(strat['start']):%d/%m/%Y} · devise {currency(strat)}")
-            if perf is not None:
-                series[display_name(key)] = perf
-                st.metric("Rendement total", pct(perf_kpis(perf, periods_per_year(strat))["total"]))
-            st.plotly_chart(chart_donut(labels, values, colors), width="stretch", key=f"ov_{key}")
-
-    if series:
-        fig = go.Figure()
-        for i, (k, s) in enumerate(series.items()):
-            fig.add_trace(go.Scatter(x=s.index, y=s, name=k,
-                                     line=dict(color=PALETTE[i % len(PALETTE)], width=2),
-                                     hovertemplate="%{y:+.1%}"))
-        st.subheader("Évolution comparée")
-        st.plotly_chart(_pct_layout(fig, legend=True), width="stretch", key="ov_perf")
-        st.caption("Chaque courbe part de la date de lancement de sa stratégie, dans sa propre devise.")
-
-
-# ---------------------------------------------------------------------------
-# APPLICATION
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # PAGE : RÉFLEXIONS
 # ---------------------------------------------------------------------------
 # Chaque réflexion est un fichier Markdown (.md) dans le dossier reflexions/.
@@ -740,7 +706,6 @@ def page_strategies():
     # --- Menu de sélection de la stratégie
     # Lien partageable : ?strategie=permanent-portfolio (ou l'ancien nom : ?strategie=donald)
     keys = list(strategies.keys())
-    options = keys + ([COMPARE_OPTION] if len(keys) > 1 else [])
     names = {k: display_name(k) for k in keys}
     w = st.query_params.get("strategie", "").strip().lower()
 
@@ -749,30 +714,24 @@ def page_strategies():
                                  pf.normalize(k.split(" - ")[0]).split()[0])
 
     default = next((i for i, k in enumerate(keys) if matches(k)), 0)
-    if w == "comparaison" and len(keys) > 1:
-        default = len(keys)
     col, _ = st.columns([1, 3])
-    choice = col.selectbox("Stratégie", options, index=default,
+    choice = col.selectbox("Stratégie", keys, index=default,
                            format_func=lambda k: names.get(k, k))
-    st.query_params["strategie"] = slug(names[choice]) if choice in names else "comparaison"
+    st.query_params["strategie"] = slug(names[choice])
 
-    if choice == COMPARE_OPTION:
-        st.title("Comparaison des stratégies")
-        render_overview(strategies, prices_for)
+    prices = prices_for(choice)
+    strat = strategies[choice]
+    if prices.dropna(how="all").empty:
+        st.error("Yahoo Finance n'a renvoyé aucun cours. Réessaie dans quelques minutes.")
+        return
+    last = prices.dropna(how="all").index.max()
+    st.title(names[choice])
+    st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées) · "
+               f"performance calculée en {currency(strat)}")
+    if is_trades(strat):
+        render_trades_strategy(choice, strat, prices)
     else:
-        prices = prices_for(choice)
-        strat = strategies[choice]
-        if prices.dropna(how="all").empty:
-            st.error("Yahoo Finance n'a renvoyé aucun cours. Réessaie dans quelques minutes.")
-            return
-        last = prices.dropna(how="all").index.max()
-        st.title(names[choice])
-        st.caption(f"Cours au {last:%d/%m/%Y} · données Yahoo Finance (différées) · "
-                   f"performance calculée en {currency(strat)}")
-        if is_trades(strat):
-            render_trades_strategy(choice, strat, prices)
-        else:
-            render_portfolio_strategy(choice, strat, prices)
+        render_portfolio_strategy(choice, strat, prices)
 
     st.divider()
     st.caption("Stratégies personnelles présentées à titre informatif, hors frais et fiscalité. "
