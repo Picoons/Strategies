@@ -74,7 +74,6 @@ BENCHMARKS = {
 
 CASH_LABEL = "Liquidités"
 STRATEGY_OPTION = "📈 Stratégie"
-COMPARE_OPTION = "Comparer les stratégies"
 SYMBOLS = {"EUR": "€", "USD": "$"}
 
 CLASS_COLORS = {
