@@ -5,39 +5,39 @@
   "cash_weight": 0.0,
   "positions": [
     {
+      "ticker": "DG.PA",
+      "name": "Vinci",
+      "class": "Industrie",
+      "weight": 0.2886,
+      "ref_price": 106.45
+    },
+    {
       "ticker": "SAN.PA",
       "name": "Sanofi",
       "class": "Santé",
-      "weight": 0.226,
-      "ref_price": 71.92
+      "weight": 0.1966,
+      "ref_price": 72.53
     },
     {
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.2149,
-      "ref_price": 13.675
+      "weight": 0.1854,
+      "ref_price": 13.68
     },
     {
       "ticker": "EN.PA",
       "name": "Bouygues",
       "class": "Industrie",
-      "weight": 0.2015,
-      "ref_price": 42.74
+      "weight": 0.1697,
+      "ref_price": 41.73
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.1869,
-      "ref_price": 59.46
-    },
-    {
-      "ticker": "DG.PA",
-      "name": "Vinci",
-      "class": "Industrie",
-      "weight": 0.1708,
-      "ref_price": 108.7
+      "weight": 0.1596,
+      "ref_price": 58.86
     }
   ],
   "orders": [
@@ -80,6 +80,14 @@
       "class": "Santé",
       "side": "buy",
       "price": 72.5
+    },
+    {
+      "date": "2026-09-30",
+      "ticker": "DG.PA",
+      "name": "Vinci",
+      "class": "Industrie",
+      "side": "buy",
+      "price": 107.26
     }
   ],
   "perf": {
@@ -90,8 +98,8 @@
     ],
     "twr": [
       0.0,
-      -0.000649,
-      -0.014922
+      -0.020674,
+      -0.032119
     ]
   }
 }
