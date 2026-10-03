@@ -249,19 +249,23 @@ def benchmark_perfs(key: str, prices: pd.DataFrame, index: pd.DatetimeIndex) -> 
     return out
 
 
-def perf_kpis(perf: pd.Series, ppy: int = 252) -> dict:
-    """Rendement total, rendement annualisé, volatilité annualisée, drawdown max."""
+def perf_kpis(perf: pd.Series, ppy: int = 252, annualize_short: bool = False) -> dict:
+    """
+    Rendement total, rendement annualisé (géométrique), volatilité annualisée, drawdown max.
+    Le rendement annualisé n'est affiché qu'à partir d'un an d'historique,
+    sauf annualize_short=True (utilisé par l'outil Markowitz, qui a besoin d'un chiffre).
+    """
     idx = 1 + perf
     idx = idx.asfreq("B").ffill() if ppy == 252 else idx.asfreq("D").ffill()
     total = float(idx.iloc[-1] / idx.iloc[0] - 1)
     years = (idx.index[-1] - idx.index[0]).days / 365.25
-    annual = (1 + total) ** (1 / years) - 1 if years >= 1 else np.nan
+    annual = (1 + total) ** (1 / years) - 1 if (years >= 1 or (annualize_short and years > 0)) else np.nan
     rets = idx.pct_change().dropna()
     if ppy == 252:
         rets = rets[rets != 0]
     vol = float(rets.std() * np.sqrt(ppy)) if len(rets) > 20 else np.nan
     dd = float((idx / idx.cummax() - 1).min())
-    return {"total": total, "annual": annual, "vol": vol, "max_dd": dd}
+    return {"total": total, "annual": annual, "vol": vol, "max_dd": dd, "years": years}
 
 
 # ---------------------------------------------------------------------------
@@ -632,11 +636,12 @@ def page_outils():
         return
     strategies, prices_by_ccy = market
 
-    perfs = {}
+    perfs, ppys = {}, {}
     for key, s in strategies.items():
         perf = strategy_perf(s, prices_by_ccy[currency(s)])
         if perf is not None and len(perf) > 5:
             perfs[display_name(key)] = perf
+            ppys[display_name(key)] = periods_per_year(s)
     if len(perfs) < 2:
         st.info("Il faut au moins deux stratégies avec un historique pour utiliser cet outil.")
         return
@@ -656,6 +661,15 @@ def page_outils():
         A = c[3].slider("Aversion au risque A", 0.5, 10.0, 4.0, 0.5,
                         help="Plus A est élevé, plus tu pénalises la volatilité. "
                              "Utilité : U = E(r) − ½·A·σ².")
+        method = st.radio(
+            "Estimation du rendement et du risque de chaque stratégie",
+            ["Historique complet (mêmes chiffres que les pages Stratégies)", "Période commune uniquement"],
+            horizontal=True,
+            help="Historique complet : rendement annualisé et volatilité calculés exactement comme sur la page "
+                 "de chaque stratégie, depuis son lancement ; seules les corrélations utilisent la période "
+                 "commune. Période commune : tout est estimé sur les seules dates où toutes les stratégies "
+                 "existent (Markowitz « pur », moyenne arithmétique des rendements).")
+        full_history = method.startswith("Historique")
         c = st.columns([1, 1, 2])
         allow_short = c[0].checkbox("Autoriser la vente à découvert", value=False,
                                     help="Poids négatifs possibles (entre −100 % et +200 %).")
@@ -675,9 +689,25 @@ def page_outils():
                  "Retire la stratégie la plus récente ou passe en fréquence quotidienne.")
         return
     inp = mk.estimate(R, ppy)
+    starts = {n: perfs[n].index.min() for n in chosen}
+    short_hist = []
+    if full_history:
+        mu, sigma = [], []
+        for i, n in enumerate(inp.names):
+            k = perf_kpis(perfs[n], ppys[n], annualize_short=True)
+            mu.append(k["annual"])
+            sigma.append(k["vol"] if pd.notna(k["vol"]) else inp.sigma[i])
+            if k["years"] < 1:
+                short_hist.append(n)
+        inp = mk.from_moments(inp, np.array(mu), np.array(sigma))
 
-    st.caption(f"Période commune : du {inp.start:%d/%m/%Y} au {inp.end:%d/%m/%Y} · "
-               f"{inp.n_obs} rendements {freq_label.lower()}s")
+    st.caption(f"Corrélations sur la période commune : du {inp.start:%d/%m/%Y} au {inp.end:%d/%m/%Y} · "
+               f"{inp.n_obs} rendements {freq_label.lower()}s"
+               + (" · rendements et volatilités sur l'historique complet de chaque stratégie"
+                  if full_history else ""))
+    if short_hist:
+        st.info("Moins d'un an d'historique pour : " + ", ".join(short_hist) + ". Leur rendement annualisé "
+                "est une extrapolation (la page de la stratégie affiche « — » pour cette raison).")
     if inp.n_obs < {52: 26, 252: 120, 12: 24}[ppy]:
         st.warning("Historique commun court : les rendements espérés sont très incertains, les pondérations "
                    "proposées peuvent changer fortement d'un mois à l'autre. À lire comme une indication.")
@@ -688,17 +718,23 @@ def page_outils():
     with left:
         stats = pd.DataFrame({
             "Stratégie": inp.names,
+            "Depuis": [(starts[n] if full_history else inp.start).date() for n in inp.names],
             "Rendement annualisé": inp.mu * 100,
             "Volatilité annualisée": inp.sigma * 100,
             "Sharpe": (inp.mu - rf) / inp.sigma,
         })
         st.dataframe(stats, hide_index=True, width="stretch", column_config={
+            "Depuis": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "Rendement annualisé": st.column_config.NumberColumn(format="%+.1f %%"),
             "Volatilité annualisée": st.column_config.NumberColumn(format="%.1f %%"),
             "Sharpe": st.column_config.NumberColumn(format="%.2f"),
         })
-        st.caption(f"Sharpe = (rendement − taux sans risque) / volatilité. "
-                   f"Rendements moyens {freq_label.lower()}s × {ppy}, volatilité × √{ppy}.")
+        if full_history:
+            st.caption("Sharpe = (rendement − taux sans risque) / volatilité. Rendement annualisé géométrique "
+                       "et volatilité quotidienne annualisée, comme sur les pages Stratégies.")
+        else:
+            st.caption(f"Sharpe = (rendement − taux sans risque) / volatilité. "
+                       f"Rendements moyens {freq_label.lower()}s × {ppy}, volatilité × √{ppy}.")
     with right:
         corr = inp.corr
         fig = go.Figure(go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, zmin=-1, zmax=1,

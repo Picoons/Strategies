@@ -65,6 +65,18 @@ def estimate(returns: pd.DataFrame, periods_per_year: int) -> Inputs:
                   len(returns), returns.index.min(), returns.index.max())
 
 
+def from_moments(base: Inputs, mu: np.ndarray, sigma: np.ndarray) -> Inputs:
+    """
+    Remplace rendements et volatilités (estimés ailleurs, par ex. sur l'historique complet
+    de chaque stratégie) en gardant les corrélations de la période commune :
+        Cov = D · Corr · D, avec D = diag(sigma)
+    """
+    corr = base.corr.loc[base.names, base.names].values
+    cov = np.outer(sigma, sigma) * corr
+    return Inputs(base.names, np.asarray(mu, float), cov, np.asarray(sigma, float), base.corr,
+                  base.n_obs, base.start, base.end)
+
+
 # ---------------------------------------------------------------------------
 # 2. PORTEFEUILLES
 # ---------------------------------------------------------------------------
