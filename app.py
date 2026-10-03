@@ -23,11 +23,13 @@ import streamlit as st
 
 import importlib
 
+import markowitz as mk
 import portfolio as pf
 
-# Recharge portfolio.py à chaque exécution : évite qu'une ancienne version reste en mémoire
+# Recharge portfolio.py et markowitz.py à chaque exécution : évite qu'une ancienne version reste en mémoire
 # sur Streamlit Cloud après une mise à jour du fichier.
 pf = importlib.reload(pf)
+mk = importlib.reload(mk)
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION DU SITE
@@ -526,6 +528,256 @@ def show_table(table: pd.DataFrame, color_col: str, config: dict):
 
 
 # ---------------------------------------------------------------------------
+# PAGE : OUTILS (Markowitz)
+# ---------------------------------------------------------------------------
+
+C_FRONTIER = "#1d4ed8"
+C_CAL = "#16a34a"
+C_INDIFF = "#dc2626"
+C_CLOUD = "#cbd5e1"
+
+
+def chart_markowitz(inp, cloud, front, w_min, w_tan, cp, rf, A, allow_short) -> go.Figure:
+    fig = go.Figure()
+    if cloud is not None:
+        fig.add_trace(go.Scatter(x=cloud["vol"], y=cloud["ret"], mode="markers", name="Portefeuilles possibles",
+                                 marker=dict(color=C_CLOUD, size=4, opacity=0.5), hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=front["vol"], y=front["ret"], mode="lines", name="Frontière efficiente",
+                             line=dict(color=C_FRONTIER, width=3),
+                             hovertemplate="Risque %{x:.1%}<br>Rendement %{y:.1%}<extra></extra>"))
+
+    t = mk.port_stats(w_tan, inp, rf)
+    x_max = max(float(inp.sigma.max()), t["vol"], cp["vol"]) * 1.15
+    xs = np.linspace(0, x_max, 100)
+    fig.add_trace(go.Scatter(x=xs, y=rf + t["sharpe"] * xs, mode="lines", name="CAL (droite d'allocation du capital)",
+                             line=dict(color=C_CAL, width=2),
+                             hovertemplate="Risque %{x:.1%}<br>Rendement %{y:.1%}<extra></extra>"))
+    fig.add_trace(go.Scatter(x=xs, y=cp["utility"] + 0.5 * A * xs ** 2, mode="lines",
+                             name=f"Courbe d'indifférence (A = {A:g})".replace(".", ","),
+                             line=dict(color=C_INDIFF, width=2, dash="dash"), hoverinfo="skip"))
+
+    for i, name in enumerate(inp.names):
+        fig.add_trace(go.Scatter(x=[inp.sigma[i]], y=[inp.mu[i]], mode="markers+text", name=name,
+                                 text=[name], textposition="top center", showlegend=False,
+                                 marker=dict(color="#0f172a", size=10),
+                                 hovertemplate=f"{name}<br>Risque %{{x:.1%}}<br>Rendement %{{y:.1%}}<extra></extra>"))
+    m = mk.port_stats(w_min, inp, rf)
+    points = [("Variance minimale", m["vol"], m["ret"], "diamond", "#7c3aed"),
+              ("Portefeuille tangent (Sharpe max)", t["vol"], t["ret"], "star", C_CAL),
+              ("Mon portefeuille optimal", cp["vol"], cp["ret"], "circle", C_INDIFF)]
+    for label, x, y, symbol, color in points:
+        fig.add_trace(go.Scatter(x=[x], y=[y], mode="markers", name=label,
+                                 marker=dict(color=color, size=15, symbol=symbol, line=dict(color="white", width=1.5)),
+                                 hovertemplate=f"{label}<br>Risque %{{x:.1%}}<br>Rendement %{{y:.1%}}<extra></extra>"))
+    fig.add_trace(go.Scatter(x=[0], y=[rf], mode="markers", name="Taux sans risque",
+                             marker=dict(color=C_CAL, size=9), showlegend=False,
+                             hovertemplate="Taux sans risque %{y:.1%}<extra></extra>"))
+
+    ys = [inp.mu.min(), inp.mu.max(), rf, cp["ret"], t["ret"]]
+    pad = (max(ys) - min(ys)) * 0.25 + 0.01
+    fig.update_layout(height=520, margin=dict(l=10, r=10, t=30, b=10), separators=", ",
+                      legend=dict(orientation="h", yanchor="top", y=-0.12, x=0),
+                      xaxis=dict(title="Risque (volatilité annualisée)", tickformat=".0%", range=[0, x_max]),
+                      yaxis=dict(title="Rendement espéré annualisé", tickformat=".0%",
+                                 range=[min(ys) - pad, max(ys) + pad]))
+    return fig
+
+
+def chart_weights(weights: dict) -> go.Figure:
+    items = [(k, v) for k, v in weights.items() if abs(v) > 1e-4]
+    labels = [k for k, _ in items]
+    values = [v for _, v in items]
+    colors = [CLASS_COLORS[CASH_LABEL] if k in ("Sans risque", "Emprunt") else PALETTE[i % len(PALETTE)]
+              for i, k in enumerate(labels)]
+    fig = go.Figure(go.Bar(x=values, y=labels, orientation="h", marker_color=colors,
+                           text=[pct(v, sign=False, decimals=0) for v in values], textposition="auto",
+                           insidetextanchor="middle", cliponaxis=False,
+                           hovertemplate="%{y} : %{x:.1%}<extra></extra>"))
+    fig.update_layout(height=60 + 38 * len(labels), margin=dict(l=10, r=40, t=10, b=10),
+                      separators=", ", xaxis=dict(visible=False, range=[min(0, min(values)) * 1.15,
+                                                                        max(values) * 1.35]),
+                      yaxis=dict(autorange="reversed"))
+    return fig
+
+
+def allocation_card(title: str, help_text: str, weights: dict, stats: dict, capital: float, key: str):
+    with st.container(border=True):
+        st.markdown(f"**{title}**")
+        st.caption(help_text)
+        sharpe = f"{stats['sharpe']:.2f}".replace(".", ",") if pd.notna(stats["sharpe"]) else "—"
+        st.markdown(f"Rendement **{pct(stats['ret'])}** · Risque **{pct(stats['vol'], sign=False)}** · "
+                    f"Sharpe **{sharpe}**")
+        st.plotly_chart(chart_weights(weights), width="stretch", key=key)
+        if capital > 0:
+            rows = [{"Poche": k, "Poids": v * 100, "Montant (€)": v * capital}
+                    for k, v in weights.items() if abs(v) > 1e-4]
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config={
+                "Poids": st.column_config.NumberColumn(format="%.1f %%"),
+                "Montant (€)": st.column_config.NumberColumn(format="%.0f €"),
+            })
+
+
+def page_outils():
+    st.title("Outils")
+    st.subheader("Allocation de Markowitz entre les stratégies")
+    st.markdown(
+        "À partir de l'historique de chaque stratégie, le modèle estime son **rendement**, son **risque** "
+        "(écart-type) et les **corrélations** entre stratégies, trace la **frontière efficiente**, ajoute "
+        "un **placement sans risque** (droite d'allocation du capital, CAL) puis choisit le portefeuille "
+        "qui correspond à **ton aversion au risque**."
+    )
+
+    market = load_market()
+    if market is None:
+        return
+    strategies, prices_by_ccy = market
+
+    perfs = {}
+    for key, s in strategies.items():
+        perf = strategy_perf(s, prices_by_ccy[currency(s)])
+        if perf is not None and len(perf) > 5:
+            perfs[display_name(key)] = perf
+    if len(perfs) < 2:
+        st.info("Il faut au moins deux stratégies avec un historique pour utiliser cet outil.")
+        return
+
+    weeks = {n: (p.index.max() - p.index.min()).days / 7 for n, p in perfs.items()}
+
+    # --- Paramètres
+    with st.container(border=True):
+        c = st.columns([2, 1, 1, 1])
+        default = [n for n, w in weeks.items() if w >= 12] or list(perfs.keys())
+        chosen = c[0].multiselect("Stratégies", list(perfs.keys()), default=default,
+                                  help="Par défaut, les stratégies ayant au moins 12 semaines d'historique.")
+        freq_label = c[1].selectbox("Fréquence des rendements", list(mk.PERIODS.keys()), index=0,
+                                    help="Hebdomadaire conseillé : les stratégies n'ont pas les mêmes jours "
+                                         "de cotation (la crypto cote aussi le week-end).")
+        rf = c[2].number_input("Taux sans risque (%/an)", value=2.0, step=0.25, format="%.2f") / 100
+        A = c[3].slider("Aversion au risque A", 0.5, 10.0, 4.0, 0.5,
+                        help="Plus A est élevé, plus tu pénalises la volatilité. "
+                             "Utilité : U = E(r) − ½·A·σ².")
+        c = st.columns([1, 1, 2])
+        allow_short = c[0].checkbox("Autoriser la vente à découvert", value=False,
+                                    help="Poids négatifs possibles (entre −100 % et +200 %).")
+        allow_lev = c[1].checkbox("Autoriser l'emprunt (levier)", value=False,
+                                  help="Permet d'investir plus de 100 % dans le portefeuille risqué (200 % maximum).")
+        capital = c[2].number_input("Capital à répartir (€, facultatif)", min_value=0.0, value=0.0, step=500.0,
+                                    help="Uniquement pour convertir les poids en montants. Rien n'est enregistré.")
+
+    if len(chosen) < 2:
+        st.warning("Choisis au moins deux stratégies.")
+        return
+
+    freq, ppy = mk.PERIODS[freq_label]
+    R = mk.aligned_returns({n: perfs[n] for n in chosen}, freq)
+    if len(R) < 8:
+        st.error(f"Seulement {len(R)} observations communes : pas assez pour estimer des covariances. "
+                 "Retire la stratégie la plus récente ou passe en fréquence quotidienne.")
+        return
+    inp = mk.estimate(R, ppy)
+
+    st.caption(f"Période commune : du {inp.start:%d/%m/%Y} au {inp.end:%d/%m/%Y} · "
+               f"{inp.n_obs} rendements {freq_label.lower()}s")
+    if inp.n_obs < {52: 26, 252: 120, 12: 24}[ppy]:
+        st.warning("Historique commun court : les rendements espérés sont très incertains, les pondérations "
+                   "proposées peuvent changer fortement d'un mois à l'autre. À lire comme une indication.")
+
+    # --- 1. Rendement, risque, corrélations
+    st.subheader("1. Rendement, risque et corrélations")
+    left, right = st.columns([3, 2])
+    with left:
+        stats = pd.DataFrame({
+            "Stratégie": inp.names,
+            "Rendement annualisé": inp.mu * 100,
+            "Volatilité annualisée": inp.sigma * 100,
+            "Sharpe": (inp.mu - rf) / inp.sigma,
+        })
+        st.dataframe(stats, hide_index=True, width="stretch", column_config={
+            "Rendement annualisé": st.column_config.NumberColumn(format="%+.1f %%"),
+            "Volatilité annualisée": st.column_config.NumberColumn(format="%.1f %%"),
+            "Sharpe": st.column_config.NumberColumn(format="%.2f"),
+        })
+        st.caption(f"Sharpe = (rendement − taux sans risque) / volatilité. "
+                   f"Rendements moyens {freq_label.lower()}s × {ppy}, volatilité × √{ppy}.")
+    with right:
+        corr = inp.corr
+        fig = go.Figure(go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, zmin=-1, zmax=1,
+                                   colorscale=[[0, "#2563eb"], [0.5, "#f8fafc"], [1, "#dc2626"]],
+                                   text=np.round(corr.values, 2), texttemplate="%{text}", showscale=False,
+                                   hovertemplate="%{y} / %{x} : %{z:.2f}<extra></extra>"))
+        fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10), separators=", ",
+                          yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig, width="stretch", key="corr")
+        st.caption("Corrélations : plus elles sont faibles (ou négatives), plus la diversification réduit le risque.")
+
+    # --- 2. Frontière efficiente
+    try:
+        w_min = mk.min_variance(inp, allow_short)
+        w_tan = mk.max_sharpe(inp, rf, allow_short)
+        front = mk.frontier(inp, allow_short)
+    except RuntimeError as e:
+        st.error(str(e))
+        return
+    t_stats = mk.port_stats(w_tan, inp, rf)
+    if t_stats["ret"] <= rf:
+        st.warning("Aucune combinaison ne bat le taux sans risque sur la période : "
+                   "le modèle recommanderait de rester entièrement au taux sans risque.")
+    cp = mk.complete_portfolio(w_tan, inp, rf, A, allow_lev)
+    cloud = None if allow_short else mk.opportunity_set(inp)
+
+    st.subheader("2. Frontière efficiente, CAL et courbe d'indifférence")
+    st.plotly_chart(chart_markowitz(inp, cloud, front, w_min, w_tan, cp, rf, A, allow_short),
+                    width="stretch", key="frontier")
+    st.caption("Le portefeuille tangent est le point où la CAL touche la frontière : c'est la meilleure "
+               "combinaison risquée (Sharpe maximal). Ton portefeuille optimal est le point de la CAL "
+               "touché par ta courbe d'indifférence la plus haute.")
+
+    # --- 3. Pondérations
+    st.subheader("3. Pondérations proposées")
+    c = st.columns(3)
+    with c[0]:
+        allocation_card("Variance minimale", "Le moins de risque possible, sans regarder le rendement.",
+                        dict(zip(inp.names, w_min)), mk.port_stats(w_min, inp, rf), capital, "w_min")
+    with c[1]:
+        allocation_card("Sharpe maximal (portefeuille tangent)",
+                        "Le meilleur rendement par unité de risque, 100 % investi.",
+                        dict(zip(inp.names, w_tan)), t_stats, capital, "w_tan")
+    with c[2]:
+        weights = dict(cp["weights"])
+        if abs(cp["cash"]) > 1e-4:
+            weights["Sans risque" if cp["cash"] > 0 else "Emprunt"] = cp["cash"]
+        y_txt = pct(cp["y"], sign=False, decimals=0)
+        a_txt = f"{A:g}".replace(".", ",")
+        note = f"Avec A = {a_txt}, y* = {y_txt} dans le portefeuille tangent, le reste au taux sans risque."
+        allocation_card("Mon portefeuille optimal", note, weights,
+                        {"ret": cp["ret"], "vol": cp["vol"],
+                         "sharpe": (cp["ret"] - rf) / cp["vol"] if cp["vol"] > 0 else np.nan},
+                        capital, "w_cp")
+        cap = mk.MAX_LEVERAGE if allow_lev else 1.0
+        if cp["y_raw"] > cap:
+            st.caption(f"Le modèle voudrait y* = {pct(cp['y_raw'], sign=False, decimals=0)} : "
+                       f"plafonné à {pct(cap, sign=False, decimals=0)}"
+                       + ("." if allow_lev else " car l'emprunt (levier) est désactivé."))
+
+    st.latex(r"y^* = \frac{E(r_T) - r_f}{A\,\sigma_T^2}")
+
+    with st.expander("Limites du modèle"):
+        st.markdown(
+            "- **Les rendements passés ne prédisent pas les rendements futurs.** Le modèle est très sensible "
+            "au rendement espéré estimé : quelques semaines exceptionnelles suffisent à le faire basculer "
+            "vers une stratégie. Le portefeuille de variance minimale, qui n'utilise pas les rendements, "
+            "est le plus stable.\n"
+            "- **Historique commun** : seule la période où toutes les stratégies sélectionnées existent est "
+            "utilisée. Une stratégie récente raccourcit l'échantillon pour toutes.\n"
+            "- **Risque = écart-type** : les risques extrêmes (krach, gap, liquidité) ne sont pas bien "
+            "mesurés par la volatilité.\n"
+            "- **Devises** : chaque stratégie est mesurée dans sa devise (Ethereum swing trading en dollars, "
+            "les autres en euros).\n"
+            "- Hors frais, fiscalité et coûts de rééquilibrage."
+        )
+
+
+# ---------------------------------------------------------------------------
 # PAGE : RÉFLEXIONS
 # ---------------------------------------------------------------------------
 # Chaque réflexion est un fichier Markdown (.md) dans le dossier reflexions/.
@@ -675,14 +927,15 @@ def page_reflexions():
 # PAGE : STRATÉGIES
 # ---------------------------------------------------------------------------
 
-def page_strategies():
+def load_market():
+    """Stratégies publiées + cours (regroupés par devise). None si rien à afficher."""
     sig = data_signature()
     strategies, errors = load_strategies(sig)
     for e in errors:
         st.error(e)
     if not strategies:
         st.info("Aucune stratégie publiée. Lance `python export_public.py` pour générer les fichiers de data/.")
-        return
+        return None
 
     # Cours regroupés par devise (EUR pour Donald et Daisy, USD pour Picsou…)
     by_ccy: dict[str, set] = {}
@@ -698,7 +951,15 @@ def page_strategies():
             prices_by_ccy[ccy] = get_prices(tuple(sorted(tickers)), str(starts[ccy].date()), ccy, sig)
     except Exception as e:
         st.error(f"Impossible de récupérer les cours : {e}")
+        return None
+    return strategies, prices_by_ccy
+
+
+def page_strategies():
+    market = load_market()
+    if market is None:
         return
+    strategies, prices_by_ccy = market
 
     def prices_for(key: str) -> pd.DataFrame:
         return prices_by_ccy[currency(strategies[key])]
@@ -743,7 +1004,7 @@ def page_strategies():
 # APPLICATION
 # ---------------------------------------------------------------------------
 
-SECTIONS = {"strategies": "📈 Stratégies", "reflexions": "✍️ Réflexions"}
+SECTIONS = {"strategies": "📈 Stratégies", "outils": "🧮 Outils", "reflexions": "✍️ Réflexions"}
 
 
 def main():
@@ -766,6 +1027,8 @@ def main():
 
     if section == "reflexions":
         page_reflexions()
+    elif section == "outils":
+        page_outils()
     else:
         page_strategies()
 
