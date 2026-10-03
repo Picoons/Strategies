@@ -122,6 +122,8 @@ def max_sharpe(inp: Inputs, rf: float, allow_short: bool = False) -> np.ndarray:
 def frontier(inp: Inputs, allow_short: bool = False, points: int = 60) -> pd.DataFrame:
     """Frontière efficiente : variance minimale pour chaque niveau de rendement visé."""
     n = len(inp.mu)
+    if n == 1:
+        return pd.DataFrame([{"vol": float(inp.sigma[0]), "ret": float(inp.mu[0]), inp.names[0]: 1.0}])
     w_min = min_variance(inp, allow_short)
     r_min = float(w_min @ inp.mu)
     r_max = float(inp.mu.max()) if not allow_short else float(inp.mu.max()) * 1.5 + 1e-9
@@ -154,16 +156,26 @@ MAX_LEVERAGE = 2.0  # avec levier, au plus 200 % investi dans le portefeuille ri
 
 
 def complete_portfolio(w_tan: np.ndarray, inp: Inputs, rf: float, A: float,
-                       allow_leverage: bool = False) -> dict:
+                       allow_leverage: bool = False, r_borrow: float | None = None) -> dict:
     """
-    Part y* investie dans le portefeuille tangent, le reste au taux sans risque :
+    Part y* investie dans le portefeuille tangent, le reste dans le placement sûr :
         y* = (E(r_T) - r_f) / (A * sigma_T^2)
+    rf       : taux auquel on place la part non investie (taux sans risque ou placement sûr)
+    r_borrow : taux auquel on emprunte si y* > 100 % (par défaut = rf)
     Plafonnée à 100 % sans levier, à MAX_LEVERAGE avec levier.
     """
+    r_borrow = rf if r_borrow is None else r_borrow
     t = port_stats(w_tan, inp, rf)
-    y_raw = (t["ret"] - rf) / (A * t["vol"] ** 2) if t["vol"] > 0 else 0.0
-    y = max(0.0, min(MAX_LEVERAGE if allow_leverage else 1.0, y_raw))
-    ret = rf + y * (t["ret"] - rf)
+    var = t["vol"] ** 2
+    y_lend = (t["ret"] - rf) / (A * var) if var > 0 else 0.0
+    y_raw = y_lend
+    if y_lend > 1:
+        y_raw = (t["ret"] - r_borrow) / (A * var)          # au-delà de 100 %, on emprunte
+        y = min(MAX_LEVERAGE, max(1.0, y_raw)) if allow_leverage else 1.0
+    else:
+        y = max(0.0, y_lend)
+    rate = rf if y <= 1 else r_borrow
+    ret = rate + y * (t["ret"] - rate)
     vol = y * t["vol"]
     return {"y": y, "y_raw": y_raw, "ret": ret, "vol": vol,
             "utility": ret - 0.5 * A * vol ** 2,
