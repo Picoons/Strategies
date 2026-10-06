@@ -49,9 +49,9 @@ TARGET_ALLOCATION = {
 # Nom affiché sur le site (clé = nom du fichier sans extension).
 # Sans entrée ici, on affiche le début du nom de fichier ("Donald - TR" -> "Donald").
 STRATEGY_NAMES = {
-    "Donald - TR": "Permanent portfolio",
-    "Daisy - TR": "PEA strategy",
-    "Picsou ETH - TR": "Ethereum swing trading",
+    "Donald - TR": "Macro - Long only strategy",
+    "Daisy - TR": "Momentum - Long only strategy",
+    "Picsou ETH - TR": "Crypto - Long/Short strategy",
 }
 
 # Texte de présentation par stratégie (facultatif)
@@ -123,7 +123,8 @@ def display_name(key: str) -> str:
 
 
 def slug(text: str) -> str:
-    return "-".join(pf.normalize(text).replace("&", " ").split())
+    """Texte -> identifiant d'URL : "Crypto - Long/Short strategy" -> "crypto-long-short-strategy"."""
+    return re.sub(r"[^a-z0-9]+", "-", pf.normalize(text)).strip("-")
 
 
 def currency(strat: dict) -> str:
