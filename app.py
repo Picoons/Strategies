@@ -56,12 +56,10 @@ STRATEGY_NAMES = {
 
 # Texte de présentation par stratégie (facultatif)
 DESCRIPTIONS = {
-    "Donald - TR": "Portefeuille d'ETF équipondéré en trois blocs : "
-                   "or physique, actions asiatiques et énergie mondiale.",
+    "Donald - TR": "Portefeuille d'ETF basé sur le portefeuille permanent de Browne.",
     "Daisy - TR": "Actions du CAC 40 sélectionnées par un screening hebdomadaire "
-                  "basé sur l'indicateur Daisy.",
-    "Picsou ETH - TR": "Stratégie systématique long / short sur Ethereum, "
-                       "100 % du capital engagé sur chaque trade, sans levier.",
+                  "basé sur un indicateur de momentum.",
+    "Picsou ETH - TR": "Stratégie systématique long / short sur Ethereum, sans levier.",
 }
 
 # Benchmarks affichés sur la courbe de performance (nom -> ticker Yahoo).
