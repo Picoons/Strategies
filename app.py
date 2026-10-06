@@ -50,7 +50,7 @@ TARGET_ALLOCATION = {
 # Sans entrée ici, on affiche le début du nom de fichier ("Donald - TR" -> "Donald").
 STRATEGY_NAMES = {
     "Donald - TR": "Macro - Long only strategy",
-    "Daisy - TR": "Momentum - Long only strategy (CAC 40 only)",
+    "Daisy - TR": "CAC40 (PEA) - Long only strategy",
     "Picsou ETH - TR": "Crypto - Long/Short strategy",
 }
 
