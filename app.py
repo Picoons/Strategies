@@ -398,13 +398,56 @@ def render_kpis(strat: dict, perf: pd.Series | None, benches: dict):
                 help="Plus forte baisse depuis un plus haut.")
 
     if benches:
-        c = st.columns(4)
-        for i, (name, s) in enumerate(benches.items()):
-            b = perf_kpis(s, ppy)
-            diff = (k["total"] - b["total"]) * 100
-            c[i % 4].metric(f"{name} sur la même période", pct(b["total"]),
-                            delta=f"{diff:+.1f} pts pour la stratégie".replace(".", ","),
-                            help=f"Drawdown max de l'indice : {pct(b['max_dd'], sign=False)}")
+        render_benchmark_table(k, benches, ppy)
+
+
+def render_benchmark_table(k: dict, benches: dict, ppy: int):
+    """Stratégie vs indices sur la même période : rendement, volatilité, drawdown, rendement/risque."""
+    rows = [("Stratégie", k)] + [(name, perf_kpis(s, ppy)) for name, s in benches.items()]
+    table = pd.DataFrame([{
+        "": name,
+        "Rendement total": r["total"] * 100,
+        "Rendement annualisé": r["annual"] * 100,
+        "Volatilité annualisée": r["vol"] * 100,
+        "Drawdown max": r["max_dd"] * 100,
+        "Rendement / volatilité": (r["annual"] if pd.notna(r["annual"]) else r["total"]) / r["vol"]
+        if pd.notna(r["vol"]) and r["vol"] > 0 else np.nan,
+    } for name, r in rows])
+
+    def highlight(row):
+        return ["font-weight: 600" if row[""] == "Stratégie" else "" for _ in row]
+
+    st.markdown("**Comparaison avec les indices sur la même période**")
+    st.dataframe(
+        table.style.apply(highlight, axis=1),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Rendement total": st.column_config.NumberColumn(format="%+.1f %%"),
+            "Rendement annualisé": st.column_config.NumberColumn(format="%+.1f %%"),
+            "Volatilité annualisée": st.column_config.NumberColumn(format="%.1f %%"),
+            "Drawdown max": st.column_config.NumberColumn(format="%.1f %%"),
+            "Rendement / volatilité": st.column_config.NumberColumn(
+                format="%.2f", help="Rendement annualisé divisé par la volatilité annualisée "
+                                    "(rendement total si moins d'un an d'historique). "
+                                    "Plus il est élevé, plus le rendement est obtenu avec peu de risque."),
+        },
+    )
+    s_vol, s_ret = k["vol"], (k["annual"] if pd.notna(k["annual"]) else k["total"])
+    notes = []
+    for name, s in benches.items():
+        b = perf_kpis(s, ppy)
+        b_ret = b["annual"] if pd.notna(b["annual"]) else b["total"]
+        if pd.notna(s_vol) and pd.notna(b["vol"]) and pd.notna(s_ret) and pd.notna(b_ret):
+            vol_txt = "moins" if s_vol < b["vol"] else "plus"
+            ret_txt = "plus" if s_ret > b_ret else "moins"
+            notes.append(f"face au {name} : {vol_txt} volatile, {ret_txt} rentable"
+                         if not name.lower().startswith(("a", "e", "i", "o", "u")) else
+                         f"face à l'{name} : {vol_txt} volatile, {ret_txt} rentable")
+    if notes:
+        st.caption("Sur la période, la stratégie est " + " ; ".join(notes) + ". "
+                   "Volatilités calculées de la même façon pour la stratégie et les indices "
+                   f"(rendements quotidiens × √{ppy}).")
 
 
 # ---------------------------------------------------------------------------
