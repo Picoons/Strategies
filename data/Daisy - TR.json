@@ -1,7 +1,7 @@
 {
   "name": "Daisy - TR",
   "start": "2026-09-28",
-  "as_of": "2026-09-30",
+  "as_of": "2026-10-08",
   "cash_weight": 0.0,
   "positions": [
     {
@@ -9,35 +9,35 @@
       "name": "Vinci",
       "class": "Industrie",
       "weight": 0.2886,
-      "ref_price": 106.45
-    },
-    {
-      "ticker": "SAN.PA",
-      "name": "Sanofi",
-      "class": "Santé",
-      "weight": 0.1966,
-      "ref_price": 72.53
+      "ref_price": 106.35
     },
     {
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.1854,
-      "ref_price": 13.68
+      "weight": 0.1938,
+      "ref_price": 14.285
+    },
+    {
+      "ticker": "SAN.PA",
+      "name": "Sanofi",
+      "class": "Santé",
+      "weight": 0.193,
+      "ref_price": 71.13
     },
     {
       "ticker": "EN.PA",
       "name": "Bouygues",
       "class": "Industrie",
-      "weight": 0.1697,
-      "ref_price": 41.73
+      "weight": 0.1643,
+      "ref_price": 40.36
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.1596,
-      "ref_price": 58.86
+      "weight": 0.1602,
+      "ref_price": 59.02
     }
   ],
   "orders": [
@@ -94,12 +94,24 @@
     "dates": [
       "2026-09-28",
       "2026-09-29",
-      "2026-09-30"
+      "2026-09-30",
+      "2026-10-01",
+      "2026-10-02",
+      "2026-10-05",
+      "2026-10-06",
+      "2026-10-07",
+      "2026-10-08"
     ],
     "twr": [
       0.0,
       -0.020674,
-      -0.032119
+      -0.030424,
+      -0.037251,
+      -0.034573,
+      -0.041544,
+      -0.026315,
+      -0.026092,
+      -0.032512
     ]
   }
 }
