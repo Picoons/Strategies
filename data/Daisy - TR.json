@@ -1,43 +1,50 @@
 {
   "name": "Daisy - TR",
   "start": "2026-09-28",
-  "as_of": "2026-10-08",
+  "as_of": "2026-10-12",
   "cash_weight": 0.0,
   "positions": [
+    {
+      "ticker": "HO.PA",
+      "name": "Thales",
+      "class": "Industrie",
+      "weight": 0.2307,
+      "ref_price": 221.0
+    },
     {
       "ticker": "DG.PA",
       "name": "Vinci",
       "class": "Industrie",
-      "weight": 0.2886,
-      "ref_price": 106.35
-    },
-    {
-      "ticker": "ORA.PA",
-      "name": "Orange",
-      "class": "Télécoms & médias",
-      "weight": 0.1938,
-      "ref_price": 14.285
+      "weight": 0.2241,
+      "ref_price": 107.35
     },
     {
       "ticker": "SAN.PA",
       "name": "Sanofi",
       "class": "Santé",
-      "weight": 0.193,
-      "ref_price": 71.13
+      "weight": 0.1507,
+      "ref_price": 72.17
+    },
+    {
+      "ticker": "ORA.PA",
+      "name": "Orange",
+      "class": "Télécoms & médias",
+      "weight": 0.1449,
+      "ref_price": 13.885
     },
     {
       "ticker": "EN.PA",
       "name": "Bouygues",
       "class": "Industrie",
-      "weight": 0.1643,
-      "ref_price": 40.36
+      "weight": 0.1263,
+      "ref_price": 40.34
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.1602,
-      "ref_price": 59.02
+      "weight": 0.1233,
+      "ref_price": 59.08
     }
   ],
   "orders": [
@@ -88,6 +95,14 @@
       "class": "Industrie",
       "side": "buy",
       "price": 107.26
+    },
+    {
+      "date": "2026-10-12",
+      "ticker": "HO.PA",
+      "name": "Thales",
+      "class": "Industrie",
+      "side": "buy",
+      "price": 220.26
     }
   ],
   "perf": {
@@ -100,7 +115,9 @@
       "2026-10-05",
       "2026-10-06",
       "2026-10-07",
-      "2026-10-08"
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-12"
     ],
     "twr": [
       0.0,
@@ -111,7 +128,9 @@
       -0.041544,
       -0.026315,
       -0.026092,
-      -0.032512
+      -0.030503,
+      -0.036175,
+      -0.031356
     ]
   }
 }
