@@ -772,11 +772,19 @@ def page_strategies():
         return bool(w) and w in (slug(names[k]), slug(k.split(" - ")[0]),
                                  pf.normalize(k.split(" - ")[0]).split()[0])
 
-    default = next((i for i, k in enumerate(keys) if matches(k)), 0)
+    # La valeur initiale du menu n'est fixée qu'une seule fois (lien partagé, sinon dernière
+    # stratégie vue, sinon la première). Ensuite c'est le menu lui-même qui garde la sélection :
+    # recalculer un index à chaque affichage recréait le menu et faisait perdre des clics.
+    if st.session_state.get("strategy_choice") not in keys:
+        from_url = next((k for k in keys if matches(k)), None)
+        last = st.session_state.get("last_strategy")
+        st.session_state["strategy_choice"] = from_url or (last if last in keys else keys[0])
     col, _ = st.columns([1, 3])
-    choice = col.selectbox("Stratégie", keys, index=default,
+    choice = col.selectbox("Stratégie", keys, key="strategy_choice",
                            format_func=lambda k: names.get(k, k))
-    st.query_params["strategie"] = slug(names[choice])
+    st.session_state["last_strategy"] = choice
+    if st.query_params.get("strategie") != slug(names[choice]):
+        st.query_params["strategie"] = slug(names[choice])
 
     prices = prices_for(choice)
     strat = strategies[choice]
