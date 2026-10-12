@@ -54,6 +54,10 @@ STRATEGY_NAMES = {
     "Picsou ETH - TR": "Crypto - Long/Short strategy",
 }
 
+# Ordre du menu : la première est celle affichée à l'arrivée sur le site.
+# Les stratégies absentes de cette liste sont ajoutées à la fin.
+STRATEGY_ORDER = ["Donald - TR", "Picsou ETH - TR", "Daisy - TR"]
+
 # Texte de présentation par stratégie (facultatif)
 DESCRIPTIONS = {
     "Donald - TR": "Portefeuille d'ETF basé sur le portefeuille permanent de Browne.",
@@ -759,7 +763,8 @@ def page_strategies():
 
     # --- Menu de sélection de la stratégie
     # Lien partageable : ?strategie=permanent-portfolio (ou l'ancien nom : ?strategie=donald)
-    keys = list(strategies.keys())
+    keys = sorted(strategies.keys(),
+                  key=lambda k: STRATEGY_ORDER.index(k) if k in STRATEGY_ORDER else len(STRATEGY_ORDER))
     names = {k: display_name(k) for k in keys}
     w = st.query_params.get("strategie", "").strip().lower()
 
