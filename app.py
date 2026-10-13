@@ -43,7 +43,7 @@ GITHUB_REPO = "Picoons/strategies"
 
 # Allocation cible par stratégie (clé = nom du fichier sans extension)
 TARGET_ALLOCATION = {
-    "Donald - TR": {"Or": 1 / 3, "Asie": 1 / 3, "Énergie": 1 / 3},
+    "Donald - TR": {"Or": 0.25, "Asie": 0.25, "Énergie": 0.25, "Obligations": 0.25},
 }
 
 # Nom affiché sur le site (clé = nom du fichier sans extension).
@@ -82,6 +82,7 @@ CLASS_COLORS = {
     "Or": "#d4a017",
     "Asie": "#dc2626",
     "Énergie": "#2563eb",
+    "Obligations": "#16a34a",
     "Industrie": "#0891b2",
     "Consommation de base": "#16a34a",
     "Consommation cyclique": "#65a30d",
@@ -193,9 +194,7 @@ def live_weights(strat: dict, last_px: pd.Series) -> pd.DataFrame:
         drift = now / p["ref_price"] if p["ref_price"] and pd.notna(now) else 1.0
         rows.append({"name": p["name"], "class": p["class"], "ticker": p["ticker"],
                      "raw": p["weight"] * drift})
-    if strat.get("cash_weight", 0) > 0.005:
-        rows.append({"name": CASH_LABEL, "class": CASH_LABEL, "ticker": "",
-                     "raw": strat["cash_weight"]})
+    # Le cash n'est jamais affiché : la répartition porte uniquement sur les lignes investies.
     df = pd.DataFrame(rows)
     df["weight"] = df["raw"] / df["raw"].sum()
     return df.sort_values("weight", ascending=False).reset_index(drop=True)
@@ -217,14 +216,14 @@ def portfolio_perf(strat: dict, prices: pd.DataFrame) -> pd.Series | None:
     if len(after) == 0:
         return hist
 
-    ratio = pd.Series(strat.get("cash_weight", 0.0), index=after)
+    ratio = pd.Series(0.0, index=after)
     for p in strat["positions"]:
         t = p["ticker"]
         if t in px.columns and p["ref_price"]:
             ratio = ratio + p["weight"] * px.loc[after, t] / p["ref_price"]
         else:
             ratio = ratio + p["weight"]
-    ratio = ratio / (sum(p["weight"] for p in strat["positions"]) + strat.get("cash_weight", 0.0))
+    ratio = ratio / sum(p["weight"] for p in strat["positions"])
     ext = (1 + hist.iloc[-1]) * ratio - 1
     return pd.concat([hist, ext])
 
@@ -355,7 +354,7 @@ def exposure(strat: dict, prices: pd.DataFrame) -> tuple[list, list, list]:
             side = open_t[0]["side"]
             return ([f"{strat['asset']['name']} ({'long' if side == 'long' else 'short'})"], [1.0],
                     [C_POS if side == "long" else C_NEG])
-        return [CASH_LABEL], [1.0], [CLASS_COLORS[CASH_LABEL]]
+        return ["Hors position"], [1.0], [CLASS_COLORS[CASH_LABEL]]
     w = live_weights(strat, prices.ffill().iloc[-1])
     by_class = w.groupby("class", sort=False)["weight"].sum().sort_values(ascending=False)
     return (by_class.index.tolist(), by_class.values.tolist(),

@@ -29,6 +29,9 @@ TICKER_MAP = {
     "Physical Swiss gold USD": "SGBS.MI",             # WisdomTree Physical Swiss Gold - JE00B588CD74 (Milan, EUR)
     "MSCI China Tech USD (Acc)": "CBUK.DE",           # iShares MSCI China Tech Acc - IE000NFR7C63
     "Hang Seng Tech HKD (Acc)": "H4ZX.DE",            # HSBC Hang Seng TECH - IE00BMWXKN31
+    "Xtrackers II Japan Government Bond UCITS ETF": "XJSE.DE",  # Xtrackers Japan Gov Bond 1C - LU0952581584
+    "Japan Government Bond": "XJSE.DE",
+    "Japan Government Bond JPY (Acc)": "XJSE.DE",
 }
 
 # Classe d'actif par ticker (pour le graphique de répartition).
@@ -39,6 +42,7 @@ ASSET_CLASS = {
     "CBUK.DE": "Asie",
     "H4ZX.DE": "Asie",
     "XDW0.DE": "Énergie",
+    "XJSE.DE": "Obligations",
 }
 
 # Nom affiché sur le site (sinon on garde le nom de l'Excel)
@@ -49,7 +53,12 @@ DISPLAY_NAME = {
     "CBUK.DE": "iShares MSCI China Tech",
     "H4ZX.DE": "HSBC Hang Seng TECH",
     "XDW0.DE": "Xtrackers MSCI World Energy",
+    "XJSE.DE": "Xtrackers Japan Government Bond",
 }
+
+# Le cash n'est jamais considéré comme faisant partie d'un portefeuille : la répartition et la
+# performance portent uniquement sur les lignes investies (une vente sort la ligne du portefeuille).
+EXCLUDE_CASH = True
 
 # Réglages propres à chaque stratégie (clé = nom du fichier Excel sans extension)
 #   unit_price : True si la colonne "P revient" contient le prix UNITAIRE (sinon = montant total)
@@ -465,26 +474,31 @@ def compute_strategy(name: str, tx: pd.DataFrame, prices: pd.DataFrame,
         qty.loc[r["date"]:, r["ticker"]] += sign * r["qty"]
     qty = qty.where(qty.abs() > 1e-9, 0.0)
 
-    # --- Cash et flux externes par jour
+    # --- Flux externes et cash
     cash_delta = pd.Series(0.0, index=grid)
-    flow = pd.Series(0.0, index=grid)  # dépôts (+) / retraits (-)
-    for _, r in tx.iterrows():
-        d, a = r["date"], r["amount"]
-        if r["kind"] == "deposit":
-            cash_delta[d] += a; flow[d] += a
-        elif r["kind"] == "withdraw":
-            cash_delta[d] -= a; flow[d] -= a
-        elif r["kind"] == "buy":
-            cash_delta[d] -= a
-        elif r["kind"] in ("sell", "dividend"):
-            cash_delta[d] += a
-    # Stratégie sans lignes de dépôt : chaque achat est considéré comme financé
-    # par un apport du même montant (et chaque vente comme un retrait).
-    if not (tx["kind"] == "deposit").any():
-        for _, r in tx[tx["kind"].isin(["buy", "sell"])].iterrows():
-            a = r["amount"] if r["kind"] == "buy" else -r["amount"]
-            cash_delta[r["date"]] += a
-            flow[r["date"]] += a
+    flow = pd.Series(0.0, index=grid)  # apports (+) / retraits (-)
+    if EXCLUDE_CASH or not (tx["kind"] == "deposit").any():
+        # Le cash ne fait jamais partie du portefeuille : seules les lignes investies comptent.
+        # Un achat = apport du montant investi ; une vente = sortie du produit de la vente ;
+        # un dividende = sortie (il compte dans la performance mais ne reste pas en cash).
+        # Les lignes "Dépôt"/"Retrait" de l'Excel sont ignorées.
+        for _, r in tx.iterrows():
+            d, a = r["date"], r["amount"]
+            if r["kind"] == "buy":
+                flow[d] += a
+            elif r["kind"] in ("sell", "dividend"):
+                flow[d] -= a
+    else:
+        for _, r in tx.iterrows():
+            d, a = r["date"], r["amount"]
+            if r["kind"] == "deposit":
+                cash_delta[d] += a; flow[d] += a
+            elif r["kind"] == "withdraw":
+                cash_delta[d] -= a; flow[d] -= a
+            elif r["kind"] == "buy":
+                cash_delta[d] -= a
+            elif r["kind"] in ("sell", "dividend"):
+                cash_delta[d] += a
     cash = cash_delta.cumsum()
     net_deposits = flow.cumsum()
 
