@@ -46,6 +46,15 @@ TARGET_ALLOCATION = {
     "Donald - TR": {"Or": 0.25, "Asie": 0.25, "Énergie": 0.25, "Obligations": 0.25},
 }
 
+# Classe et nom affichés par ticker. Ils priment sur ceux enregistrés dans les JSON,
+# donc une correction ici s'applique immédiatement, sans relancer l'export.
+CLASS_OVERRIDES = {
+    "XJSE.DE": "Obligations",
+}
+NAME_OVERRIDES = {
+    "XJSE.DE": "Xtrackers Japan Government Bond",
+}
+
 # Nom affiché sur le site (clé = nom du fichier sans extension).
 # Sans entrée ici, on affiche le début du nom de fichier ("Donald - TR" -> "Donald").
 STRATEGY_NAMES = {
@@ -121,6 +130,14 @@ def class_color(label: str, i: int) -> str:
     return CLASS_COLORS.get(label, PALETTE[i % len(PALETTE)])
 
 
+def asset_class_of(ticker: str, default: str) -> str:
+    return CLASS_OVERRIDES.get(ticker) or pf.ASSET_CLASS.get(ticker) or default
+
+
+def asset_name_of(ticker: str, default: str) -> str:
+    return NAME_OVERRIDES.get(ticker) or pf.DISPLAY_NAME.get(ticker) or default
+
+
 def display_name(key: str) -> str:
     return STRATEGY_NAMES.get(key, key.split(" - ")[0].strip())
 
@@ -192,8 +209,9 @@ def live_weights(strat: dict, last_px: pd.Series) -> pd.DataFrame:
     for p in strat["positions"]:
         now = last_px.get(p["ticker"], np.nan)
         drift = now / p["ref_price"] if p["ref_price"] and pd.notna(now) else 1.0
-        rows.append({"name": p["name"], "class": p["class"], "ticker": p["ticker"],
-                     "raw": p["weight"] * drift})
+        rows.append({"name": asset_name_of(p["ticker"], p["name"]),
+                     "class": asset_class_of(p["ticker"], p["class"]),
+                     "ticker": p["ticker"], "raw": p["weight"] * drift})
     # Le cash n'est jamais affiché : la répartition porte uniquement sur les lignes investies.
     df = pd.DataFrame(rows)
     df["weight"] = df["raw"] / df["raw"].sum()
@@ -462,6 +480,8 @@ def render_portfolio_strategy(key: str, strat: dict, prices: pd.DataFrame):
     last_px = prices.ffill().iloc[-1]
     orders = pd.DataFrame(strat["orders"])
     orders["date"] = pd.to_datetime(orders["date"])
+    orders["class"] = [asset_class_of(t, c) for t, c in zip(orders["ticker"], orders["class"])]
+    orders["name"] = [asset_name_of(t, n) for t, n in zip(orders["ticker"], orders["name"])]
     perf = strategy_perf(strat, prices)
     benches = benchmark_perfs(key, prices, perf.index) if perf is not None else {}
 
