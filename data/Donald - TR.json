@@ -1,36 +1,43 @@
 {
   "name": "Donald - TR",
   "start": "2024-12-10",
-  "as_of": "2026-10-12",
-  "cash_weight": 0.0679,
+  "as_of": "2026-10-13",
+  "cash_weight": 0.0,
   "positions": [
-    {
-      "ticker": "XDW0.DE",
-      "name": "Xtrackers MSCI World Energy",
-      "class": "Énergie",
-      "weight": 0.3479,
-      "ref_price": 69.96
-    },
     {
       "ticker": "IQQF.DE",
       "name": "iShares MSCI AC Far East ex-Japan",
       "class": "Asie",
-      "weight": 0.2889,
-      "ref_price": 85.46
+      "weight": 0.2619,
+      "ref_price": 83.14
+    },
+    {
+      "ticker": "XJSE.DE",
+      "name": "Xtrackers II Japan Government Bond UCITS ETF",
+      "class": "Autre",
+      "weight": 0.2304,
+      "ref_price": 6.0342
+    },
+    {
+      "ticker": "XDW0.DE",
+      "name": "Xtrackers MSCI World Energy",
+      "class": "Énergie",
+      "weight": 0.2301,
+      "ref_price": 71.26
     },
     {
       "ticker": "SGBS.MI",
       "name": "WisdomTree Physical Swiss Gold",
       "class": "Or",
-      "weight": 0.1779,
-      "ref_price": 356.92
+      "weight": 0.2012,
+      "ref_price": 357.86
     },
     {
       "ticker": "PPFB.DE",
       "name": "iShares Physical Gold",
       "class": "Or",
-      "weight": 0.1173,
-      "ref_price": 72.435
+      "weight": 0.0764,
+      "ref_price": 72.66
     }
   ],
   "orders": [
@@ -185,6 +192,30 @@
       "class": "Asie",
       "side": "sell",
       "price": 4.3554
+    },
+    {
+      "date": "2026-10-12",
+      "ticker": "XJSE.DE",
+      "name": "Xtrackers II Japan Government Bond UCITS ETF",
+      "class": "Autre",
+      "side": "buy",
+      "price": 6.025
+    },
+    {
+      "date": "2026-10-12",
+      "ticker": "SGBS.MI",
+      "name": "WisdomTree Physical Swiss Gold",
+      "class": "Or",
+      "side": "buy",
+      "price": 357.66
+    },
+    {
+      "date": "2026-10-12",
+      "ticker": "IQQF.DE",
+      "name": "iShares MSCI AC Far East ex-Japan",
+      "class": "Asie",
+      "side": "buy",
+      "price": 85.35
     }
   ],
   "perf": {
@@ -668,7 +699,8 @@
       "2026-10-07",
       "2026-10-08",
       "2026-10-09",
-      "2026-10-12"
+      "2026-10-12",
+      "2026-10-13"
     ],
     "twr": [
       0.0,
@@ -1150,7 +1182,8 @@
       0.494312,
       0.500667,
       0.514729,
-      0.510326
+      0.513667,
+      0.505523
     ]
   }
 }
