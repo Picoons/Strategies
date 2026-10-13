@@ -8,36 +8,36 @@
       "ticker": "IQQF.DE",
       "name": "iShares MSCI AC Far East ex-Japan",
       "class": "Asie",
-      "weight": 0.2619,
-      "ref_price": 83.14
+      "weight": 0.2758,
+      "ref_price": 83.05
     },
     {
       "ticker": "XJSE.DE",
       "name": "Xtrackers II Japan Government Bond UCITS ETF",
       "class": "Autre",
-      "weight": 0.2304,
+      "weight": 0.2429,
       "ref_price": 6.0342
     },
     {
       "ticker": "XDW0.DE",
       "name": "Xtrackers MSCI World Energy",
       "class": "Énergie",
-      "weight": 0.2301,
-      "ref_price": 71.26
+      "weight": 0.2426,
+      "ref_price": 71.25
     },
     {
       "ticker": "SGBS.MI",
       "name": "WisdomTree Physical Swiss Gold",
       "class": "Or",
-      "weight": 0.2012,
+      "weight": 0.1581,
       "ref_price": 357.86
     },
     {
       "ticker": "PPFB.DE",
       "name": "iShares Physical Gold",
       "class": "Or",
-      "weight": 0.0764,
-      "ref_price": 72.66
+      "weight": 0.0806,
+      "ref_price": 72.675
     }
   ],
   "orders": [
@@ -1182,8 +1182,8 @@
       0.494312,
       0.500667,
       0.514729,
-      0.513667,
-      0.505523
+      0.513707,
+      0.504759
     ]
   }
 }

@@ -8,43 +8,43 @@
       "ticker": "HO.PA",
       "name": "Thales",
       "class": "Industrie",
-      "weight": 0.2324,
-      "ref_price": 224.0
+      "weight": 0.2325,
+      "ref_price": 224.2
     },
     {
       "ticker": "DG.PA",
       "name": "Vinci",
       "class": "Industrie",
-      "weight": 0.2225,
-      "ref_price": 107.25
+      "weight": 0.2227,
+      "ref_price": 107.35
     },
     {
       "ticker": "SAN.PA",
       "name": "Sanofi",
       "class": "Santé",
       "weight": 0.1499,
-      "ref_price": 72.26
+      "ref_price": 72.24
     },
     {
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.1442,
-      "ref_price": 13.9
+      "weight": 0.144,
+      "ref_price": 13.88
     },
     {
       "ticker": "EN.PA",
       "name": "Bouygues",
       "class": "Industrie",
-      "weight": 0.1263,
-      "ref_price": 40.57
+      "weight": 0.1264,
+      "ref_price": 40.62
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.1248,
-      "ref_price": 60.14
+      "weight": 0.1246,
+      "ref_price": 60.06
     }
   ],
   "orders": [
@@ -132,7 +132,7 @@
       -0.030503,
       -0.036175,
       -0.038748,
-      -0.027071
+      -0.026919
     ]
   }
 }
