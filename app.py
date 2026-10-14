@@ -228,20 +228,37 @@ def portfolio_perf(strat: dict, prices: pd.DataFrame) -> pd.Series | None:
         return None
     hist = pd.Series(perf["twr"], index=pd.to_datetime(perf["dates"]))
     as_of = hist.index.max()
-
     px = prices.ffill()
+
+    # Poids et cours de référence enregistrés au moment de l'export
+    weights = {p["ticker"]: p["weight"] for p in strat["positions"]}
+    refs = {p["ticker"]: p["ref_price"] for p in strat["positions"]}
+
+    # Si l'export a été fait pendant la séance, le dernier point et les cours de référence
+    # sont des cours intraday, pas des clôtures. On recale ce dernier point sur la clôture
+    # du jour d'export, sinon la variation entre l'export et la clôture serait attribuée
+    # au jour suivant (journée faussement négative ou positive).
+    if as_of in px.index:
+        close = px.loc[as_of]
+        moved = {t: close[t] / refs[t] for t in weights
+                 if t in px.columns and refs[t] and pd.notna(close.get(t))}
+        if moved:
+            adj = sum(weights[t] * moved.get(t, 1.0) for t in weights) / sum(weights.values())
+            hist.iloc[-1] = (1 + hist.iloc[-1]) * adj - 1
+            weights = {t: w * moved.get(t, 1.0) for t, w in weights.items()}
+            refs = {t: float(close[t]) if t in moved else r for t, r in refs.items()}
+
     after = px.index[px.index > as_of]
     if len(after) == 0:
         return hist
 
     ratio = pd.Series(0.0, index=after)
-    for p in strat["positions"]:
-        t = p["ticker"]
-        if t in px.columns and p["ref_price"]:
-            ratio = ratio + p["weight"] * px.loc[after, t] / p["ref_price"]
+    for t, w in weights.items():
+        if t in px.columns and refs[t]:
+            ratio = ratio + w * px.loc[after, t] / refs[t]
         else:
-            ratio = ratio + p["weight"]
-    ratio = ratio / sum(p["weight"] for p in strat["positions"])
+            ratio = ratio + w
+    ratio = ratio / sum(weights.values())
     ext = (1 + hist.iloc[-1]) * ratio - 1
     return pd.concat([hist, ext])
 
