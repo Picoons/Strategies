@@ -396,6 +396,23 @@ def exposure(strat: dict, prices: pd.DataFrame) -> tuple[list, list, list]:
             [class_color(l, i) for i, l in enumerate(by_class.index)])
 
 
+def since_text(date, label: str) -> str:
+    """« Dernier ordre il y a 6 jours (12/10/2026) »."""
+    d = pd.Timestamp(date)
+    n = (pd.Timestamp.today().normalize() - d.normalize()).days
+    quand = "aujourd'hui" if n <= 0 else "hier" if n == 1 else f"il y a {n} jours"
+    return f"{label} {quand} ({d:%d/%m/%Y})"
+
+
+PERIODS = {"1 mois": 1, "6 mois": 6, "1 an": 12, "Depuis le début": None}
+
+
+def since_period(s: pd.Series, start: pd.Timestamp) -> pd.Series:
+    """Performance recalculée à partir de 0 % au début de la période choisie."""
+    s = s[s.index >= start]
+    return (1 + s) / (1 + s.iloc[0]) - 1 if len(s) else s
+
+
 def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | None,
                benches: dict, assets: dict, donut_title: str):
     """Camembert à gauche, évolution en % à droite."""
@@ -409,6 +426,13 @@ def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | No
         options = ([STRATEGY_OPTION] if perf is not None else []) + list(assets.keys())
         choice = st.selectbox("Afficher", options, key=f"sel_{key}", label_visibility="collapsed")
         if choice == STRATEGY_OPTION:
+            period = st.segmented_control("Période", list(PERIODS), default="Depuis le début",
+                                          key=f"period_{key}", label_visibility="collapsed")
+            months = PERIODS.get(period)
+            if months:
+                start = perf.index.max() - pd.DateOffset(months=months)
+                perf = since_period(perf, start)
+                benches = {n: since_period(b, start) for n, b in benches.items()}
             st.plotly_chart(chart_strategy(perf, display_name(key), benches),
                             width="stretch", key=f"perf_{key}")
         elif assets.get(choice) in prices.columns:
@@ -457,7 +481,10 @@ def render_benchmark_table(k: dict, benches: dict, ppy: int):
 
     st.markdown("**Comparaison avec les indices sur la même période**")
     st.dataframe(
-        table.style.apply(highlight, axis=1),
+        table.style.apply(highlight, axis=1).format(na_rep="—", precision=2,
+            formatter={"Rendement total": "{:+.1f} %", "Rendement annualisé": "{:+.1f} %",
+                       "Volatilité annualisée": "{:.1f} %", "Drawdown max": "{:.1f} %",
+                       "Rendement / volatilité": "{:.2f}"}),
         hide_index=True,
         width="stretch",
         column_config={
@@ -507,6 +534,7 @@ def render_portfolio_strategy(key: str, strat: dict, prices: pd.DataFrame):
     c = st.columns(3)
     c[0].metric("Lancement", f"{pd.Timestamp(strat['start']):%d/%m/%Y}")
     c[1].metric("Ordres passés", len(orders))
+    c[1].caption(since_text(orders["date"].max(), "Dernier ordre"))
     c[2].metric("Lignes en portefeuille", len(strat["positions"]))
 
     traded = orders.drop_duplicates("ticker")[["ticker", "name"]]
@@ -530,7 +558,11 @@ def render_portfolio_strategy(key: str, strat: dict, prices: pd.DataFrame):
                                   "ticker": "Ticker", "price": "Prix d'exécution"})
     table = table[["Date", "Sens", "Actif", "Classe", "Ticker", "Prix d'exécution",
                    "Cours actuel", "Variation depuis l'ordre"]].sort_values("Date", ascending=False)
-    show_table(table, "Variation depuis l'ordre", {
+    labels, _, colors = exposure(strat, prices)
+    class_colors = {c: CLASS_COLORS.get(c, PALETTE[i % len(PALETTE)])
+                    for i, c in enumerate(table["Classe"].unique())}
+    class_colors.update(dict(zip(labels, colors)))  # couleurs exactes du camembert
+    show_table(table, "Variation depuis l'ordre", class_colors=class_colors, config={
         "Date": st.column_config.DateColumn(format="DD/MM/YYYY"),
         "Prix d'exécution": st.column_config.NumberColumn(format=f"%.2f {sym}"),
         "Cours actuel": st.column_config.NumberColumn(format=f"%.2f {sym}"),
@@ -566,6 +598,8 @@ def render_trades_strategy(key: str, strat: dict, prices: pd.DataFrame):
     c = st.columns(3)
     c[0].metric("Lancement", f"{pd.Timestamp(strat['start']):%d/%m/%Y}")
     c[1].metric("Trades", len(trades), help=f"{n_closed} clôturés, {len(trades) - n_closed} en cours")
+    c[1].caption(since_text(pd.concat([trades["entry_date"], pd.to_datetime(trades["exit_date"])]).max(),
+                            "Dernier mouvement"))
     c[2].metric("Taux de réussite", pct(wins / n_closed, sign=False, decimals=0) if n_closed else "—",
                 help=f"{wins} gagnants sur {n_closed} trades clôturés")
 
@@ -595,14 +629,21 @@ def render_trades_strategy(key: str, strat: dict, prices: pd.DataFrame):
                "Résultat d'un short = 1 − prix de sortie / prix d'entrée.")
 
 
-def show_table(table: pd.DataFrame, color_col: str, config: dict):
+def show_table(table: pd.DataFrame, color_col: str, config: dict, class_colors: dict | None = None):
     def color_var(v):
         if isinstance(v, (int, float)) and not np.isnan(v):
-            return f"color: {C_POS}" if v > 0 else f"color: {C_NEG}"
+            return (f"color: {C_POS}; background-color: #dcfce7" if v > 0
+                    else f"color: {C_NEG}; background-color: #fee2e2")
         return ""
 
+    style = table.style.map(color_var, subset=[color_col])
+    if class_colors and "Classe" in table.columns:
+        # Catégorie écrite dans la même couleur que sur le camembert
+        style = style.map(lambda c: f"color: {class_colors.get(c, '#64748b')}; font-weight: 600",
+                          subset=["Classe"])
+
     st.dataframe(
-        table.style.map(color_var, subset=[color_col]),
+        style,
         hide_index=True,
         width="stretch",
         height=min(38 + 35 * len(table), 800),
