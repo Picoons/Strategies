@@ -626,7 +626,7 @@ def render_trades_strategy(key: str, strat: dict, prices: pd.DataFrame):
         "Résultat": st.column_config.NumberColumn(format="%+.2f %%"),
     })
     st.caption("Pour un trade en cours, le prix de sortie est le dernier cours connu. "
-               "Résultat d'un short = 1 − prix de sortie / prix d'entrée.")
+               "Résultat d'un short = prix d'entrée − prix de sortie / prix d'entrée.")
 
 
 def show_table(table: pd.DataFrame, color_col: str, config: dict, class_colors: dict | None = None):
