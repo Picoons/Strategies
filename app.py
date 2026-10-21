@@ -84,6 +84,11 @@ BENCHMARKS = {
 }
 
 CASH_LABEL = "Liquidités"
+# Libellé du prix affiché dans l'historique des ordres (par défaut : « Prix d'exécution »)
+PRICE_LABELS = {
+    "Daisy - TR": "Prix de revient",
+}
+
 STRATEGY_OPTION = "📈 Stratégie"
 SYMBOLS = {"EUR": "€", "USD": "$"}
 
@@ -550,13 +555,14 @@ def render_portfolio_strategy(key: str, strat: dict, prices: pd.DataFrame):
         st.plotly_chart(chart_target(by_class, target), width="stretch", key=f"tgt_{key}")
 
     st.subheader("Historique des ordres")
+    price_label = PRICE_LABELS.get(key, "Prix d'exécution")
     table = orders.copy()
     table["Cours actuel"] = table["ticker"].map(last_px)
     table["Variation depuis l'ordre"] = (table["Cours actuel"] / table["price"] - 1) * 100
     table["Sens"] = table["side"].map({"buy": "🟢 Achat", "sell": "🔴 Vente"})
     table = table.rename(columns={"date": "Date", "name": "Actif", "class": "Classe",
-                                  "ticker": "Ticker", "price": "Prix d'exécution"})
-    table = table[["Date", "Sens", "Actif", "Classe", "Ticker", "Prix d'exécution",
+                                  "ticker": "Ticker", "price": price_label})
+    table = table[["Date", "Sens", "Actif", "Classe", "Ticker", price_label,
                    "Cours actuel", "Variation depuis l'ordre"]].sort_values("Date", ascending=False)
     labels, _, colors = exposure(strat, prices)
     class_colors = {c: CLASS_COLORS.get(c, PALETTE[i % len(PALETTE)])
@@ -564,11 +570,11 @@ def render_portfolio_strategy(key: str, strat: dict, prices: pd.DataFrame):
     class_colors.update(dict(zip(labels, colors)))  # couleurs exactes du camembert
     show_table(table, "Variation depuis l'ordre", class_colors=class_colors, config={
         "Date": st.column_config.DateColumn(format="DD/MM/YYYY"),
-        "Prix d'exécution": st.column_config.NumberColumn(format=f"%.2f {sym}"),
+        price_label: st.column_config.NumberColumn(format=f"%.2f {sym}"),
         "Cours actuel": st.column_config.NumberColumn(format=f"%.2f {sym}"),
         "Variation depuis l'ordre": st.column_config.NumberColumn(format="%+.1f %%"),
     })
-    st.caption("Variation depuis l'ordre = cours actuel / prix d'exécution − 1. "
+    st.caption(f"Variation depuis l'ordre = cours actuel / {price_label.lower()} − 1. "
                "Pour une vente, une variation négative signifie que la sortie était bien placée.")
 
 
@@ -626,7 +632,7 @@ def render_trades_strategy(key: str, strat: dict, prices: pd.DataFrame):
         "Résultat": st.column_config.NumberColumn(format="%+.2f %%"),
     })
     st.caption("Pour un trade en cours, le prix de sortie est le dernier cours connu. "
-               "Résultat d'un short = prix d'entrée − prix de sortie / prix d'entrée.")
+               "Résultat d'un short = (prix d'entrée − prix de sortie) / prix d'entrée.")
 
 
 def show_table(table: pd.DataFrame, color_col: str, config: dict, class_colors: dict | None = None):
