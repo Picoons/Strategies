@@ -1,50 +1,57 @@
 {
   "name": "Daisy - TR",
   "start": "2026-09-28",
-  "as_of": "2026-10-13",
+  "as_of": "2026-10-21",
   "cash_weight": 0.0,
   "positions": [
+    {
+      "ticker": "SU.PA",
+      "name": "Schneider electric SE",
+      "class": "Industrie",
+      "weight": 0.2011,
+      "ref_price": 245.5
+    },
     {
       "ticker": "HO.PA",
       "name": "Thales",
       "class": "Industrie",
-      "weight": 0.2326,
-      "ref_price": 224.4
+      "weight": 0.188,
+      "ref_price": 229.5
     },
     {
       "ticker": "DG.PA",
       "name": "Vinci",
       "class": "Industrie",
-      "weight": 0.2225,
-      "ref_price": 107.3
+      "weight": 0.1752,
+      "ref_price": 106.95
     },
     {
       "ticker": "SAN.PA",
       "name": "Sanofi",
       "class": "Santé",
-      "weight": 0.1499,
-      "ref_price": 72.29
+      "weight": 0.12,
+      "ref_price": 73.26
     },
     {
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.1442,
-      "ref_price": 13.915
+      "weight": 0.1159,
+      "ref_price": 14.145
     },
     {
       "ticker": "EN.PA",
       "name": "Bouygues",
       "class": "Industrie",
-      "weight": 0.1263,
-      "ref_price": 40.62
+      "weight": 0.1003,
+      "ref_price": 40.81
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.1245,
-      "ref_price": 60.04
+      "weight": 0.0996,
+      "ref_price": 60.82
     }
   ],
   "orders": [
@@ -103,6 +110,14 @@
       "class": "Industrie",
       "side": "buy",
       "price": 220.26
+    },
+    {
+      "date": "2026-10-21",
+      "ticker": "SU.PA",
+      "name": "Schneider electric SE",
+      "class": "Industrie",
+      "side": "buy",
+      "price": 247.21
     }
   ],
   "perf": {
@@ -118,7 +133,13 @@
       "2026-10-08",
       "2026-10-09",
       "2026-10-12",
-      "2026-10-13"
+      "2026-10-13",
+      "2026-10-14",
+      "2026-10-15",
+      "2026-10-16",
+      "2026-10-19",
+      "2026-10-20",
+      "2026-10-21"
     ],
     "twr": [
       0.0,
@@ -131,8 +152,14 @@
       -0.026092,
       -0.030503,
       -0.036175,
-      -0.038748,
-      -0.026405
+      -0.031054,
+      -0.036272,
+      -0.026676,
+      -0.012167,
+      -0.001752,
+      -0.01612,
+      -0.01612,
+      -0.015453
     ]
   }
 }

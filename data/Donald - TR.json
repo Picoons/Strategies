@@ -1,43 +1,43 @@
 {
   "name": "Donald - TR",
   "start": "2024-12-10",
-  "as_of": "2026-10-13",
+  "as_of": "2026-10-19",
   "cash_weight": 0.0,
   "positions": [
     {
       "ticker": "IQQF.DE",
       "name": "iShares MSCI AC Far East ex-Japan",
       "class": "Asie",
-      "weight": 0.2635,
-      "ref_price": 83.05
-    },
-    {
-      "ticker": "XJSE.DE",
-      "name": "Xtrackers II Japan Government Bond UCITS ETF",
-      "class": "Autre",
-      "weight": 0.247,
-      "ref_price": 6.0342
+      "weight": 0.2555,
+      "ref_price": 79.93
     },
     {
       "ticker": "XDW0.DE",
       "name": "Xtrackers MSCI World Energy",
       "class": "Énergie",
-      "weight": 0.2467,
-      "ref_price": 71.25
+      "weight": 0.2541,
+      "ref_price": 72.86
+    },
+    {
+      "ticker": "XJSE.DE",
+      "name": "Xtrackers II Japan Government Bond UCITS ETF",
+      "class": "Autre",
+      "weight": 0.2491,
+      "ref_price": 6.0412
     },
     {
       "ticker": "SGBS.MI",
       "name": "WisdomTree Physical Swiss Gold",
       "class": "Or",
-      "weight": 0.1608,
-      "ref_price": 357.86
+      "weight": 0.1599,
+      "ref_price": 353.27
     },
     {
       "ticker": "PPFB.DE",
       "name": "iShares Physical Gold",
       "class": "Or",
-      "weight": 0.0819,
-      "ref_price": 72.66
+      "weight": 0.0814,
+      "ref_price": 71.65
     }
   ],
   "orders": [
@@ -700,7 +700,11 @@
       "2026-10-08",
       "2026-10-09",
       "2026-10-12",
-      "2026-10-13"
+      "2026-10-13",
+      "2026-10-14",
+      "2026-10-15",
+      "2026-10-16",
+      "2026-10-19"
     ],
     "twr": [
       0.0,
@@ -1182,8 +1186,12 @@
       0.494312,
       0.500667,
       0.514729,
-      0.513707,
-      0.505743
+      0.510439,
+      0.506446,
+      0.502494,
+      0.488752,
+      0.482357,
+      0.490041
     ]
   }
 }
