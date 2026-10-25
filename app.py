@@ -418,13 +418,46 @@ def since_period(s: pd.Series, start: pd.Timestamp) -> pd.Series:
     return (1 + s) / (1 + s.iloc[0]) - 1 if len(s) else s
 
 
+ALL_CLASSES = "Tout le portefeuille"
+
+
+def class_detail(strat: dict, prices: pd.DataFrame, cls: str, color: str):
+    """Lignes qui composent une classe (camembert) + performance de cette classe (graphique)."""
+    w = live_weights(strat, prices.ffill().iloc[-1])
+    w = w[w["class"] == cls]
+    r, g, b = (int(color.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    shades = [f"rgba({r},{g},{b},{a})" for a in (1, 0.7, 0.5, 0.35, 0.25)]
+    donut = (w["name"].tolist(), (w["weight"] / w["weight"].sum()).tolist(),
+             [shades[i % len(shades)] for i in range(len(w))])
+
+    # Performance de la classe calculée à l'export (comme celle de la stratégie),
+    # prolongée avec les cours du jour.
+    hist = strat.get("class_perf", {}).get(cls)
+    sub = {"perf": hist, "positions": [p for p in strat["positions"]
+                                       if asset_class_of(p["ticker"], p["class"]) == cls]}
+    return donut, (portfolio_perf(sub, prices) if hist and sub["positions"] else None)
+
+
 def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | None,
                benches: dict, assets: dict, donut_title: str):
-    """Camembert à gauche, évolution en % à droite."""
+    """Camembert à gauche, évolution en % à droite. Choisir une classe détaille les deux."""
     labels, values, colors = exposure(strat, prices)
     left, right = st.columns(2)
     with left:
         st.subheader(donut_title)
+        cls = None
+        if not is_trades(strat) and len(labels) > 1:
+            cls = st.segmented_control("Classe", [ALL_CLASSES] + labels, default=ALL_CLASSES,
+                                       key=f"class_{key}", label_visibility="collapsed")
+            cls = None if cls in (None, ALL_CLASSES) else cls
+        if cls:
+            (labels, values, colors), class_perf = class_detail(strat, prices, cls,
+                                                                colors[labels.index(cls)])
+            if class_perf is not None:
+                benches = {"Stratégie complète": perf}
+                perf = class_perf
+            else:
+                st.caption("Relance `python export_public.py` pour publier la performance par classe.")
         st.plotly_chart(chart_donut(labels, values, colors), width="stretch", key=f"donut_{key}")
     with right:
         st.subheader("Évolution")
@@ -438,7 +471,8 @@ def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | No
                 start = perf.index.max() - pd.DateOffset(months=months)
                 perf = since_period(perf, start)
                 benches = {n: since_period(b, start) for n, b in benches.items()}
-            st.plotly_chart(chart_strategy(perf, display_name(key), benches),
+            st.plotly_chart(chart_strategy(perf, cls if cls and "Stratégie complète" in benches
+                                           else display_name(key), benches),
                             width="stretch", key=f"perf_{key}")
         elif assets.get(choice) in prices.columns:
             st.plotly_chart(chart_asset(assets[choice], choice, prices, pd.Timestamp(strat["start"])),
