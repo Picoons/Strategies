@@ -513,7 +513,8 @@ def compute_strategy(name: str, tx: pd.DataFrame, prices: pd.DataFrame,
     # Les ventes restent en fin de journée (la base est la valeur de la veille).
     prev = value.shift(1).fillna(0.0)
     base = prev + flow.clip(lower=0)
-    daily_ret = ((value - prev - flow) / base).where(base > 0, 0.0).fillna(0.0)
+    # Le jour du lancement (rien en portefeuille la veille), la performance part de 0 %.
+    daily_ret = ((value - prev - flow) / base).where((base > 0) & (prev > 0), 0.0).fillna(0.0)
     twr = (1 + daily_ret).cumprod() - 1
 
     daily = pd.DataFrame(
