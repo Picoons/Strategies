@@ -506,8 +506,14 @@ def compute_strategy(name: str, tx: pd.DataFrame, prices: pd.DataFrame,
     value = invested_value + cash
 
     # --- Performance pondérée par le temps (neutralise les dépôts)
-    prev = value.shift(1)
-    daily_ret = ((value - flow) / prev - 1).where(prev > 0, 0.0).fillna(0.0)
+    # Un achat est fait pendant la séance : l'argent investi travaille déjà ce jour-là.
+    # On l'ajoute donc à la base du jour (prev + achat). Sans ça, un gros achat sur un
+    # petit portefeuille transforme le moindre écart entre prix payé et clôture Yahoo
+    # en énorme variation du jour (ex. +24 % le 22/01/2025 avec 150 € investis la veille).
+    # Les ventes restent en fin de journée (la base est la valeur de la veille).
+    prev = value.shift(1).fillna(0.0)
+    base = prev + flow.clip(lower=0)
+    daily_ret = ((value - prev - flow) / base).where(base > 0, 0.0).fillna(0.0)
     twr = (1 + daily_ret).cumprod() - 1
 
     daily = pd.DataFrame(

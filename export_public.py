@@ -37,6 +37,19 @@ def check_prices(tx: pd.DataFrame, prices: pd.DataFrame) -> bool:
     ok = True
     print("\nContrôle des tickers (prix payé vs cours Yahoo le jour de l'ordre) :")
     orders = tx[tx["kind"].isin(["buy", "sell"])]
+    # Ordres plus anciens : simple avertissement si le cours Yahoo du jour s'écarte du prix payé
+    # (donnée Yahoo douteuse ou erreur de saisie dans l'Excel), sans bloquer l'export.
+    for _, r in orders.iterrows():
+        if r["ticker"] not in prices.columns or not r["qty"]:
+            continue
+        px = prices[r["ticker"]].dropna()
+        px = px[px.index <= r["date"]]
+        if px.empty:
+            continue
+        gap = (r["amount"] / r["qty"]) / float(px.iloc[-1]) - 1
+        if abs(gap) >= 0.03:
+            print(f"  ⚠️  {r['ticker']:<9} {r['date']:%d/%m/%Y}  prix payé et cours Yahoo écartés de {gap:+.1%} "
+                  "(vérifie l'Excel ou le cours Yahoo de ce jour-là)")
     for ticker, g in orders.groupby("ticker"):
         if ticker not in prices.columns or prices[ticker].isna().all():
             print(f"  ❌ {ticker:<9} aucun cours trouvé sur Yahoo -> ticker à changer")
