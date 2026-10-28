@@ -352,14 +352,29 @@ def chart_strategy(perf: pd.Series, name: str, benches: dict) -> go.Figure:
     return _pct_layout(fig, legend=bool(benches))
 
 
-def chart_asset(ticker: str, name: str, prices: pd.DataFrame, start: pd.Timestamp) -> go.Figure:
+def chart_asset(ticker: str, name: str, prices: pd.DataFrame, start: pd.Timestamp,
+                entries: pd.DataFrame | None = None) -> go.Figure:
     px = prices[ticker].dropna()
     px = px[px.index >= px.index[px.index <= start].max()] if (px.index <= start).any() else px
     evo = px / float(px.iloc[0]) - 1
     fig = go.Figure(go.Scatter(x=evo.index, y=evo, name=name,
                                line=dict(color="#475569", width=1.6),
                                hovertemplate="%{y:+.1%}"))
-    return _pct_layout(fig)
+    # Stratégie de trading : point vert = entrée long, point rouge = entrée short
+    if entries is not None:
+        for side, color, label in (("long", C_POS, "Entrée long"), ("short", C_NEG, "Entrée short")):
+            e = entries[(entries["side"] == side) & (entries["entry_date"] >= evo.index.min())
+                        & (entries["entry_date"] <= evo.index.max())]
+            if e.empty:
+                continue
+            y = evo.reindex(evo.index.union(e["entry_date"])).ffill().loc[e["entry_date"]]
+            fig.add_trace(go.Scatter(
+                x=e["entry_date"], y=y.values, mode="markers", name=label,
+                marker=dict(color=color, size=9, line=dict(color="white", width=1.5)),
+                customdata=e["entry_price"],
+                hovertemplate=f"{label} à %{{customdata:,.0f}}<extra></extra>",
+            ))
+    return _pct_layout(fig, legend=entries is not None)
 
 
 def chart_target(current: pd.Series, target: dict) -> go.Figure:
@@ -475,7 +490,9 @@ def render_top(key: str, strat: dict, prices: pd.DataFrame, perf: pd.Series | No
                                            else display_name(key), benches),
                             width="stretch", key=f"perf_{key}")
         elif assets.get(choice) in prices.columns:
-            st.plotly_chart(chart_asset(assets[choice], choice, prices, pd.Timestamp(strat["start"])),
+            entries = trades_df(strat) if is_trades(strat) else None
+            st.plotly_chart(chart_asset(assets[choice], choice, prices, pd.Timestamp(strat["start"]),
+                                        entries),
                             width="stretch", key=f"asset_{key}")
             st.caption("Évolution du cours depuis le lancement de la stratégie.")
 
