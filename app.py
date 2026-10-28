@@ -367,7 +367,8 @@ def chart_asset(ticker: str, name: str, prices: pd.DataFrame, start: pd.Timestam
                         & (entries["entry_date"] <= evo.index.max())]
             if e.empty:
                 continue
-            y = evo.reindex(evo.index.union(e["entry_date"])).ffill().loc[e["entry_date"]]
+            # Point placé au niveau réel d'entrée (pas à la clôture du jour)
+            y = e["entry_price"] / float(px.iloc[0]) - 1
             fig.add_trace(go.Scatter(
                 x=e["entry_date"], y=y.values, mode="markers", name=label,
                 marker=dict(color=color, size=9, line=dict(color="white", width=1.5)),
