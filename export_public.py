@@ -32,9 +32,12 @@ PUBLIC_DIR = ROOT / "data"
 def check_prices(tx: pd.DataFrame, prices: pd.DataFrame) -> bool:
     """
     Compare le dernier prix d'achat de chaque actif au cours Yahoo du même jour.
-    Un écart important = ticker probablement faux (autre produit, autre devise...).
+    Ticker introuvable sur Yahoo -> export annulé.
+    Écart de plus de 5 % -> on te demande confirmation (ticker faux, ou simple
+    achat en cours de séance un jour de forte variation).
     """
     ok = True
+    doubtful = []
     print("\nContrôle des tickers (prix payé vs cours Yahoo le jour de l'ordre) :")
     orders = tx[tx["kind"].isin(["buy", "sell"])]
     # Ordres plus anciens : simple avertissement si le cours Yahoo du jour s'écarte du prix payé
@@ -52,7 +55,7 @@ def check_prices(tx: pd.DataFrame, prices: pd.DataFrame) -> bool:
                   "(vérifie l'Excel ou le cours Yahoo de ce jour-là)")
     for ticker, g in orders.groupby("ticker"):
         if ticker not in prices.columns or prices[ticker].isna().all():
-            print(f"  ❌ {ticker:<9} aucun cours trouvé sur Yahoo -> ticker à changer")
+            print(f"  ❌ {ticker:<9} aucun cours trouvé sur Yahoo -> ticker à changer dans TICKER_MAP (portfolio.py)")
             ok = False
             continue
         r = g.iloc[-1]
@@ -62,9 +65,17 @@ def check_prices(tx: pd.DataFrame, prices: pd.DataFrame) -> bool:
         gap = paid / yahoo - 1
         flag = "✅" if abs(gap) < 0.05 else "⚠️ "
         if abs(gap) >= 0.05:
-            ok = False
+            doubtful.append(ticker)
         print(f"  {flag} {ticker:<9} {r['date']:%d/%m/%Y}  payé {paid:9.2f} €  |  Yahoo {yahoo:9.2f} €  |  écart {gap:+.1%}")
-    return ok
+    if not ok:
+        return False
+    if doubtful:
+        print(f"\n  Écart de plus de 5 % sur {', '.join(doubtful)}.")
+        print("  Normal si tu as acheté en cours de séance un jour de forte variation ;")
+        print("  sinon le ticker est probablement faux.")
+        answer = input("  Le prix payé est-il bon ? Publier quand même (o/n) : ")
+        return answer.strip().lower() in ("o", "oui", "y", "yes")
+    return True
 
 
 def build_public(name: str, tx: pd.DataFrame) -> dict | None:
@@ -77,7 +88,7 @@ def build_public(name: str, tx: pd.DataFrame) -> dict | None:
             and not (tx["date"] >= today).any():
         prices = prices[prices.index < today]
     if not check_prices(tx, prices):
-        print("\n⛔ Export annulé : corrige les tickers signalés dans TICKER_MAP (portfolio.py).\n")
+        print("\n⛔ Export annulé pour cette stratégie.\n")
         return None
     res = pf.compute_strategy(name, tx, prices)
 
