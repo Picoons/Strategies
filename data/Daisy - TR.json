@@ -1,64 +1,85 @@
 {
   "name": "Daisy - TR",
   "start": "2026-09-28",
-  "as_of": "2026-10-30",
+  "as_of": "2026-11-03",
   "cash_weight": 0.0,
   "positions": [
     {
       "ticker": "SAF.PA",
       "name": "Safran",
       "class": "Industrie",
-      "weight": 0.1809,
-      "ref_price": 275.7
+      "weight": 0.1493,
+      "ref_price": 285.0
     },
     {
       "ticker": "SU.PA",
       "name": "Schneider electric SE",
       "class": "Industrie",
-      "weight": 0.1559,
-      "ref_price": 237.5
+      "weight": 0.1256,
+      "ref_price": 239.75
     },
     {
       "ticker": "HO.PA",
       "name": "Thales",
       "class": "Industrie",
-      "weight": 0.1547,
-      "ref_price": 235.7
+      "weight": 0.1221,
+      "ref_price": 233.0
     },
     {
       "ticker": "DG.PA",
       "name": "Vinci",
       "class": "Industrie",
-      "weight": 0.1425,
-      "ref_price": 108.6
+      "weight": 0.114,
+      "ref_price": 108.8
+    },
+    {
+      "ticker": "KER.PA",
+      "name": "Kering",
+      "class": "Consommation cyclique",
+      "weight": 0.0944,
+      "ref_price": 180.24
     },
     {
       "ticker": "SAN.PA",
       "name": "Sanofi",
       "class": "Santé",
-      "weight": 0.1047,
-      "ref_price": 79.74
+      "weight": 0.0849,
+      "ref_price": 80.98
     },
     {
       "ticker": "ORA.PA",
       "name": "Orange",
       "class": "Télécoms & médias",
-      "weight": 0.095,
-      "ref_price": 14.47
+      "weight": 0.077,
+      "ref_price": 14.7
     },
     {
       "ticker": "BN.PA",
       "name": "Danone",
       "class": "Consommation de base",
-      "weight": 0.086,
-      "ref_price": 65.52
+      "weight": 0.0692,
+      "ref_price": 66.02
     },
     {
       "ticker": "EN.PA",
       "name": "Bouygues",
       "class": "Industrie",
-      "weight": 0.0803,
-      "ref_price": 40.8
+      "weight": 0.0645,
+      "ref_price": 41.03
+    },
+    {
+      "ticker": "VIE.PA",
+      "name": "Veolia",
+      "class": "Industrie",
+      "weight": 0.0518,
+      "ref_price": 32.95
+    },
+    {
+      "ticker": "ACA.PA",
+      "name": "Crédit Agricole",
+      "class": "Finance",
+      "weight": 0.0472,
+      "ref_price": 15.02
     }
   ],
   "orders": [
@@ -133,6 +154,30 @@
       "class": "Industrie",
       "side": "buy",
       "price": 280.2
+    },
+    {
+      "date": "2026-11-03",
+      "ticker": "VIE.PA",
+      "name": "Veolia",
+      "class": "Industrie",
+      "side": "buy",
+      "price": 33.24
+    },
+    {
+      "date": "2026-11-04",
+      "ticker": "ACA.PA",
+      "name": "Crédit Agricole",
+      "class": "Finance",
+      "side": "buy",
+      "price": 15.67
+    },
+    {
+      "date": "2026-11-04",
+      "ticker": "KER.PA",
+      "name": "Kering",
+      "class": "Consommation cyclique",
+      "side": "buy",
+      "price": 191.55
     }
   ],
   "perf": {
@@ -161,7 +206,9 @@
       "2026-10-27",
       "2026-10-28",
       "2026-10-29",
-      "2026-10-30"
+      "2026-10-30",
+      "2026-11-02",
+      "2026-11-03"
     ],
     "twr": [
       0.0,
@@ -188,7 +235,9 @@
       0.002642,
       0.008073,
       0.019303,
-      0.014823
+      0.014823,
+      0.024571,
+      0.02187
     ]
   },
   "class_perf": {
@@ -218,7 +267,9 @@
         "2026-10-27",
         "2026-10-28",
         "2026-10-29",
-        "2026-10-30"
+        "2026-10-30",
+        "2026-11-02",
+        "2026-11-03"
       ],
       "twr": [
         0.0,
@@ -245,7 +296,9 @@
         0.03563,
         0.062857,
         0.082017,
-        0.101176
+        0.101176,
+        0.110252,
+        0.10958
       ]
     },
     "Industrie": {
@@ -274,7 +327,9 @@
         "2026-10-27",
         "2026-10-28",
         "2026-10-29",
-        "2026-10-30"
+        "2026-10-30",
+        "2026-11-02",
+        "2026-11-03"
       ],
       "twr": [
         0.0,
@@ -301,7 +356,9 @@
         -0.018995,
         -0.015309,
         -0.005581,
-        -0.023919
+        -0.023919,
+        -0.013497,
+        -0.019313
       ]
     },
     "Santé": {
@@ -328,7 +385,9 @@
         "2026-10-27",
         "2026-10-28",
         "2026-10-29",
-        "2026-10-30"
+        "2026-10-30",
+        "2026-11-02",
+        "2026-11-03"
       ],
       "twr": [
         0.0,
@@ -353,7 +412,9 @@
         0.034554,
         0.03951,
         0.048321,
-        0.097742
+        0.097742,
+        0.109994,
+        0.114813
       ]
     },
     "Télécoms & médias": {
@@ -382,7 +443,9 @@
         "2026-10-27",
         "2026-10-28",
         "2026-10-29",
-        "2026-10-30"
+        "2026-10-30",
+        "2026-11-02",
+        "2026-11-03"
       ],
       "twr": [
         0.0,
@@ -409,7 +472,9 @@
         0.022956,
         0.020445,
         0.035868,
-        0.03802
+        0.03802,
+        0.039096,
+        0.054519
       ]
     }
   }

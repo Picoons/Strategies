@@ -48,6 +48,13 @@
       "entry_date": "2026-10-08",
       "entry_price": 2560.2,
       "side": "short",
+      "exit_date": "2026-11-05",
+      "exit_price": 2444.2
+    },
+    {
+      "entry_date": "2026-11-05",
+      "entry_price": 2442.3,
+      "side": "long",
       "exit_date": null,
       "exit_price": null
     }
